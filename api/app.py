@@ -1,77 +1,70 @@
-# api/app.py
-
 from flask import Flask, request, jsonify
 
-# Task Engines
-from tasks.auto_analyze import AutoAnalyze
-from tasks.auto_predict import AutoPredict
-from tasks.auto_forecast import AutoForecast
-from tasks.auto_anomaly import AutoAnomaly
-from tasks.auto_insights import AutoInsights
-
-# Utilities
-from data.dataset_loader import DatasetLoader
-from core.engine_router import EngineRouter
-
+# Initialize Flask app
 app = Flask(__name__)
 
-# Loaders and Engines
-loader = DatasetLoader()
-router = EngineRouter()
+# Lazy imports inside a function (prevents Vercel cold start crashes)
+def load_engines():
+    from tasks.auto_analyze import AutoAnalyze
+    from tasks.auto_predict import AutoPredict
+    from tasks.auto_forecast import AutoForecast
+    from tasks.auto_anomaly import AutoAnomaly
+    from tasks.auto_insights import AutoInsights
+    from data.dataset_loader import DatasetLoader
+    from core.engine_router import EngineRouter
 
-analyzer = AutoAnalyze()
-predictor = AutoPredict()
-forecaster = AutoForecast()
-anomaly_detector = AutoAnomaly()
-insight_engine = AutoInsights()
+    engines = {
+        "loader": DatasetLoader(),
+        "router": EngineRouter(),
+        "analyzer": AutoAnalyze(),
+        "predictor": AutoPredict(),
+        "forecaster": AutoForecast(),
+        "anomaly": AutoAnomaly(),
+        "insight": AutoInsights()
+    }
+    return engines
 
-# ----------------------- ROUTES -----------------------
 
 @app.get("/")
 def home():
     return {"status": "SIFRA AI API Running", "version": "1.0.0"}
 
 
-# ------------- Common dataset extraction -----------
-
-def extract_dataset(req):
-    """ Helper to extract and validate dataset from JSON """
+def extract_dataset(req, loader):
+    """ Extract and validate dataset payload """
     if not req.json or "dataset" not in req.json:
         return None, {"error": "Missing 'dataset' in request"}, 400
+
     try:
         dataset = loader.load_raw(req.json["dataset"])
         return dataset, None, None
+
     except Exception as e:
         return None, {"error": f"Invalid dataset: {str(e)}"}, 400
 
 
-# -------------------- ANALYZE -----------------------
-
 @app.post("/analyze")
 def analyze():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
-    result = analyzer.run(dataset)
-    return jsonify(result)
+    return jsonify(engines["analyzer"].run(dataset))
 
-
-# -------------------- PREDICT -----------------------
 
 @app.post("/predict")
 def predict():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
-    result = predictor.run(dataset)
-    return jsonify(result)
+    return jsonify(engines["predictor"].run(dataset))
 
-
-# -------------------- FORECAST -----------------------
 
 @app.post("/forecast")
 def forecast():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
 
@@ -81,46 +74,35 @@ def forecast():
     except:
         steps = 5
 
-    result = forecaster.run(dataset, steps)
-    return jsonify(result)
+    return jsonify(engines["forecaster"].run(dataset, steps))
 
-
-# -------------------- ANOMALY -----------------------
 
 @app.post("/anomaly")
 def anomaly():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
-    result = anomaly_detector.run(dataset)
-    return jsonify(result)
+    return jsonify(engines["anomaly"].run(dataset))
 
-
-# -------------------- INSIGHTS -----------------------
 
 @app.post("/insights")
 def insights():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
-    result = insight_engine.run(dataset)
-    return jsonify(result)
+    return jsonify(engines["insight"].run(dataset))
 
-
-# -------------------- TREND -----------------------
 
 @app.post("/trend")
 def trend():
-    dataset, err, code = extract_dataset(request)
+    engines = load_engines()
+    dataset, err, code = extract_dataset(request, engines["loader"])
     if err:
         return err, code
-    result = router.route("trend", dataset)
-    return jsonify({"trend_score": result})
+    score = engines["router"].route("trend", dataset)
+    return jsonify({"trend_score": score})
 
 
-# -------------------- SERVER START -----------------------
-
-if __name__ == "__main__":
-    print("[API] Starting SIFRA AI Server on port 5000...")
-    app.run(host="0.0.0.0", port=5000)
-# --- IGNORE ---
+# ❗ VERY IMPORTANT: Do NOT add `app.run()` — Vercel will crash!
