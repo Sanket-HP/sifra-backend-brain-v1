@@ -1,12 +1,16 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)  # Enable cross-origin for frontend
+
 
 # -----------------------------------------------------------
 # LAZY LOADING (Fixes Vercel cold-start crash issues)
 # -----------------------------------------------------------
 def load_engines():
+
     # Core & preprocessing
     from data.dataset_loader import DatasetLoader
     from core.engine_router import EngineRouter
@@ -18,7 +22,7 @@ def load_engines():
     from tasks.auto_anomaly import AutoAnomaly
     from tasks.auto_insights import AutoInsights
 
-    # New Engines
+    # New Engines (Data science expansion pack)
     from tasks.auto_visualize import AutoVisualize
     from tasks.auto_eda import AutoEDA
     from tasks.auto_feature_engineering import AutoFeatureEngineering
@@ -26,7 +30,7 @@ def load_engines():
     from tasks.auto_evaluate import AutoEvaluate
     from tasks.auto_bigdata import AutoBigData
 
-    engines = {
+    return {
         # Loader & Router
         "loader": DatasetLoader(),
         "router": EngineRouter(),
@@ -47,8 +51,6 @@ def load_engines():
         "bigdata": AutoBigData(),
     }
 
-    return engines
-
 
 # -----------------------------------------------------------
 # HOME ROUTE
@@ -59,7 +61,32 @@ def home():
 
 
 # -----------------------------------------------------------
-# EXTRACT DATASET
+# CSV FILE UPLOAD (Used by Frontend)
+# -----------------------------------------------------------
+@app.post("/upload")
+def upload():
+    try:
+        if "file" not in request.files:
+            return {"error": "No file provided"}, 400
+
+        file = request.files["file"]
+
+        import pandas as pd
+        df = pd.read_csv(file)
+
+        return {
+            "status": "success",
+            "rows": len(df),
+            "columns": list(df.columns),
+            "preview": df.head(5).to_dict(orient="records")
+        }
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+# -----------------------------------------------------------
+# COMMON DATASET EXTRACTOR
 # -----------------------------------------------------------
 def extract_dataset(req, loader):
     if not req.json or "dataset" not in req.json:
@@ -68,36 +95,36 @@ def extract_dataset(req, loader):
     try:
         dataset = loader.load_raw(req.json["dataset"])
         return dataset, None, None
+
     except Exception as e:
         return None, {"error": f"Invalid dataset: {str(e)}"}, 400
 
 
 # -----------------------------------------------------------
-# OLD ENGINE ROUTES
+# OLD ENGINE ROUTES (Analyze, Predict, Forecast, etc.)
 # -----------------------------------------------------------
-
 @app.post("/analyze")
 def analyze():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-    return jsonify(engines["analyzer"].run(dataset))
+    return jsonify(eng["analyzer"].run(dataset))
 
 
 @app.post("/predict")
 def predict():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-    return jsonify(engines["predictor"].run(dataset))
+    return jsonify(eng["predictor"].run(dataset))
 
 
 @app.post("/forecast")
 def forecast():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
 
@@ -107,110 +134,100 @@ def forecast():
     except:
         steps = 5
 
-    return jsonify(engines["forecaster"].run(dataset, steps))
+    return jsonify(eng["forecaster"].run(dataset, steps))
 
 
 @app.post("/anomaly")
 def anomaly():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-    return jsonify(engines["anomaly"].run(dataset))
+    return jsonify(eng["anomaly"].run(dataset))
 
 
 @app.post("/insights")
 def insights():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-    return jsonify(engines["insight"].run(dataset))
+    return jsonify(eng["insight"].run(dataset))
 
 
 @app.post("/trend")
 def trend():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
 
-    score = engines["router"].route("trend", dataset)
-    return jsonify({"trend_score": score})
+    return jsonify({"trend_score": eng["router"].route("trend", dataset)})
 
 
 # -----------------------------------------------------------
-# NEW ENGINE ROUTES (Visualization, EDA, FE, Modeler, Eval, BigData)
+# NEW ADVANCED ENGINE ROUTES
 # -----------------------------------------------------------
 
 @app.post("/visualize")
 def visualize():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-
-    result = engines["visualize"].run(dataset)
-    return jsonify(result)
+    return jsonify(eng["visualize"].run(dataset))
 
 
 @app.post("/eda")
 def eda():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-
-    result = engines["eda"].run(dataset)
-    return jsonify(result)
+    return jsonify(eng["eda"].run(dataset))
 
 
 @app.post("/feature_engineering")
 def feature_engineering():
-    engines = load_engines()
-    dataset, err, code = extract_dataset(request, engines["loader"])
+    eng = load_engines()
+    dataset, err, code = extract_dataset(request, eng["loader"])
     if err:
         return err, code
-
-    result = engines["feature_eng"].run(dataset)
-    return jsonify(result)
+    return jsonify(eng["feature_eng"].run(dataset))
 
 
 @app.post("/modeler")
 def modeler():
-    engines = load_engines()
+    eng = load_engines()
     data = request.json
 
     if "X" not in data or "y" not in data:
         return {"error": "Provide 'X' and 'y' for model training"}, 400
 
-    result = engines["modeler"].run(data["X"], data["y"])
-    return jsonify(result)
+    return jsonify(eng["modeler"].run(data["X"], data["y"]))
 
 
 @app.post("/evaluate")
 def evaluate():
-    engines = load_engines()
+    eng = load_engines()
     data = request.json
 
     if "y_true" not in data or "y_pred" not in data:
         return {"error": "Provide 'y_true' and 'y_pred' for evaluation"}, 400
 
-    result = engines["evaluate"].run(data["y_true"], data["y_pred"])
-    return jsonify(result)
+    return jsonify(eng["evaluate"].run(data["y_true"], data["y_pred"]))
 
 
 @app.post("/bigdata")
 def bigdata():
-    engines = load_engines()
+    eng = load_engines()
 
     if "file_path" not in request.json:
         return {"error": "Missing 'file_path'"}, 400
 
-    file_path = request.json["file_path"]
-    result = engines["bigdata"].run(file_path)
-    return jsonify(result)
+    return jsonify(eng["bigdata"].run(request.json["file_path"]))
 
 
-# ❗ DO NOT ADD app.run() — Vercel handles routing.
-
+# -----------------------------------------------------------
+# No app.run() — Vercel handles this automatically
+# -----------------------------------------------------------
