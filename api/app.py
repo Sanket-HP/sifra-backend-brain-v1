@@ -12,26 +12,27 @@ if ROOT not in sys.path:
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable cross-origin for frontend
+CORS(app)  # Enable CORS for frontend
 
 
 # -----------------------------------------------------------
-# LAZY LOADING (Fixes Vercel cold-start crash issues)
+# LAZY LOADING — optimized for Vercel
 # -----------------------------------------------------------
 def load_engines():
+    """Load all engines on-demand to avoid Vercel cold boot crashes."""
 
-    # Core & preprocessing
+    # Core modules
     from data.dataset_loader import DatasetLoader
     from core.engine_router import EngineRouter
 
-    # Old Engines
+    # Old core engines
     from tasks.auto_analyze import AutoAnalyze
     from tasks.auto_predict import AutoPredict
     from tasks.auto_forecast import AutoForecast
     from tasks.auto_anomaly import AutoAnomaly
     from tasks.auto_insights import AutoInsights
 
-    # New Engines (Data science expansion pack)
+    # New SIFRA 2.0 modules
     from tasks.auto_visualize import AutoVisualize
     from tasks.auto_eda import AutoEDA
     from tasks.auto_feature_engineering import AutoFeatureEngineering
@@ -40,18 +41,17 @@ def load_engines():
     from tasks.auto_bigdata import AutoBigData
 
     return {
-        # Loader & Router
         "loader": DatasetLoader(),
         "router": EngineRouter(),
 
-        # Old Modules
+        # Old modules
         "analyzer": AutoAnalyze(),
         "predictor": AutoPredict(),
         "forecaster": AutoForecast(),
         "anomaly": AutoAnomaly(),
         "insight": AutoInsights(),
 
-        # New Modules
+        # New modules
         "visualize": AutoVisualize(),
         "eda": AutoEDA(),
         "feature_eng": AutoFeatureEngineering(),
@@ -62,7 +62,7 @@ def load_engines():
 
 
 # -----------------------------------------------------------
-# HOME ROUTE
+# ROOT CHECK
 # -----------------------------------------------------------
 @app.get("/")
 def home():
@@ -70,13 +70,13 @@ def home():
 
 
 # -----------------------------------------------------------
-# CSV FILE UPLOAD (Used by Frontend)
+# FILE UPLOAD HANDLER (CSV only)
 # -----------------------------------------------------------
 @app.post("/upload")
 def upload():
     try:
         if "file" not in request.files:
-            return {"error": "No file provided"}, 400
+            return {"error": "No file uploaded"}, 400
 
         file = request.files["file"]
 
@@ -91,22 +91,22 @@ def upload():
         }
 
     except Exception as e:
-        return {"error": str(e)}, 500
+        return {"error": f"Upload failed: {str(e)}"}, 500
 
 
 # -----------------------------------------------------------
-# COMMON DATASET EXTRACTOR
+# COMMON DATASET PARSER
 # -----------------------------------------------------------
 def extract_dataset(req, loader):
     if not req.json or "dataset" not in req.json:
-        return None, {"error": "Missing 'dataset' in request"}, 400
+        return None, {"error": "Missing 'dataset'"}, 400
 
     try:
         dataset = loader.load_raw(req.json["dataset"])
         return dataset, None, None
 
     except Exception as e:
-        return None, {"error": f"Invalid dataset: {str(e)}"}, 400
+        return None, {"error": f"Dataset error: {str(e)}"}, 400
 
 
 # -----------------------------------------------------------
@@ -116,8 +116,7 @@ def extract_dataset(req, loader):
 def analyze():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["analyzer"].run(dataset))
 
 
@@ -125,8 +124,7 @@ def analyze():
 def predict():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["predictor"].run(dataset))
 
 
@@ -134,14 +132,11 @@ def predict():
 def forecast():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
 
     steps = request.json.get("steps", 5)
-    try:
-        steps = int(steps)
-    except:
-        steps = 5
+    try: steps = int(steps)
+    except: steps = 5
 
     return jsonify(eng["forecaster"].run(dataset, steps))
 
@@ -150,8 +145,7 @@ def forecast():
 def anomaly():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["anomaly"].run(dataset))
 
 
@@ -159,8 +153,7 @@ def anomaly():
 def insights():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["insight"].run(dataset))
 
 
@@ -168,21 +161,18 @@ def insights():
 def trend():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
-
+    if err: return err, code
     return jsonify({"trend_score": eng["router"].route("trend", dataset)})
 
 
 # -----------------------------------------------------------
-# NEW ADVANCED ENGINE ROUTES
+# NEW ADVANCED MODULE ROUTES
 # -----------------------------------------------------------
 @app.post("/visualize")
 def visualize():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["visualize"].run(dataset))
 
 
@@ -190,8 +180,7 @@ def visualize():
 def eda():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["eda"].run(dataset))
 
 
@@ -199,43 +188,43 @@ def eda():
 def feature_engineering():
     eng = load_engines()
     dataset, err, code = extract_dataset(request, eng["loader"])
-    if err:
-        return err, code
+    if err: return err, code
     return jsonify(eng["feature_eng"].run(dataset))
 
 
 @app.post("/modeler")
 def modeler():
     eng = load_engines()
-    data = request.json
+    body = request.json
 
-    if "X" not in data or "y" not in data:
-        return {"error": "Provide 'X' and 'y' for model training"}, 400
+    if "X" not in body or "y" not in body:
+        return {"error": "Provide 'X' and 'y'"}, 400
 
-    return jsonify(eng["modeler"].run(data["X"], data["y"]))
+    return jsonify(eng["modeler"].run(body["X"], body["y"]))
 
 
 @app.post("/evaluate")
 def evaluate():
     eng = load_engines()
-    data = request.json
+    body = request.json
 
-    if "y_true" not in data or "y_pred" not in data:
-        return {"error": "Provide 'y_true' and 'y_pred' for evaluation"}, 400
+    if "y_true" not in body or "y_pred" not in body:
+        return {"error": "Provide y_true & y_pred"}, 400
 
-    return jsonify(eng["evaluate"].run(data["y_true"], data["y_pred"]))
+    return jsonify(eng["evaluate"].run(body["y_true"], body["y_pred"]))
 
 
 @app.post("/bigdata")
 def bigdata():
     eng = load_engines()
+    body = request.json
 
-    if "file_path" not in request.json:
+    if "file_path" not in body:
         return {"error": "Missing 'file_path'"}, 400
 
-    return jsonify(eng["bigdata"].run(request.json["file_path"]))
+    return jsonify(eng["bigdata"].run(body["file_path"]))
 
 
 # -----------------------------------------------------------
-# Do NOT add app.run()
+# No app.run() — Vercel handles execution
 # -----------------------------------------------------------
