@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: sifra-backend-brain-v1
+    env: python
+    repo: https://github.com/Sanket-HP/sifra-backend-brain-v1.git
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+    plan: free
