@@ -1,9 +1,7 @@
 # ============================================================
 #  SIFRA AI v8.1 ENTERPRISE (JSON DATASET EDITION)
-#  AutoML + Synthetic LLM + Knowledge + Insights
-#  FULLY FIXED VERSION
-#  → FIXED create_model (true feature names from preprocessor)
-#  → FIXED predict (raw feature alignment)
+#  AutoML + LLM + Knowledge + Insights
+#  FULL FIXED VERSION FOR RENDER + GITHUB
 # ============================================================
 
 from fastapi import FastAPI, HTTPException, Request
@@ -20,8 +18,14 @@ from core.sifra_unified import SIFRAUnifiedEngine
 from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
 
-app = FastAPI(title="SIFRA AI Backend", version="8.1-JSON-STABLE-FULL")
+# FastAPI Init
+app = FastAPI(
+    title="SIFRA AI Backend",
+    version="8.1-JSON-STABLE-FULL",
+    description="SIFRA Enterprise AutoML + LLM Engine"
+)
 
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,37 +41,36 @@ LLM_CACHE = None
 
 
 # ============================================================
-# UNIVERSAL NORMALIZER v8.1
+# HOME ROUTE (Fixes Render 404)
+# ============================================================
+@app.get("/")
+def index():
+    return {
+        "status": "running",
+        "message": "SIFRA AI Backend Online",
+        "version": "8.1-JSON-STABLE-FULL"
+    }
+
+
+# ============================================================
+# UNIVERSAL NORMALIZER
 # ============================================================
 def normalize_dataset(ds):
-    print("\n========================")
-    print("DEBUG: NORMALIZE DATASET")
-    print("TYPE:", type(ds))
-    print("PREVIEW:", str(ds)[:200])
-    print("========================\n")
 
     try:
-        # JSON {columns, data}
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
-            print("[DEBUG] FE JSON (columns + data)")
             return pd.DataFrame(ds["data"], columns=ds["columns"])
 
-        # List-of-lists
         if isinstance(ds, list) and len(ds) > 0 and isinstance(ds[0], list):
-            print("[DEBUG] FE list-of-lists")
             cols = [f"col_{i+1}" for i in range(len(ds[0]))]
             return pd.DataFrame(ds, columns=cols)
 
-        # CSV fallback
         if isinstance(ds, str) and "," in ds and "\n" in ds:
-            print("[DEBUG] CSV fallback")
             return pd.read_csv(StringIO(ds))
 
-        print("[DEBUG] Unsupported → empty DF")
         return pd.DataFrame()
 
-    except Exception as e:
-        print("[NORMALIZE ERROR]:", e)
+    except Exception:
         traceback.print_exc()
         return pd.DataFrame()
 
@@ -88,57 +91,45 @@ def sanitize(v):
 
 
 # ============================================================
-# CREATE MODEL (AutoML) — FIXED WITH TRUE RAW FEATURES
+# CREATE MODEL (AutoML)
 # ============================================================
 @app.post("/create_model")
 async def create_model(request: Request):
+
     try:
         body = await request.json()
-
-        print("\n========== /create_model ==========")
-        print("BODY:", body)
-        print("===================================\n")
 
         ds = body.get("dataset") or body.get("data") or body
         df = normalize_dataset(ds)
 
-        print("[DEBUG] Normalized DF shape =", df.shape)
-
         if df.empty:
             return {"status": "fail", "detail": "Dataset empty or invalid"}
 
-        print("[DEBUG] Running AutoML...")
         automl_raw = engine.run("automl_train", {"dataset": df})
 
-        # unwrap internal object
+        # unwrap AutoML wrapper
         result = automl_raw.get("result", automl_raw)
 
-        # --- DECODE PREPROCESSOR ---
+        # decode preprocessor to extract true raw feature names
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
 
-            # TRUE raw feature count expected by predictor
-            raw_feature_count = pre.n_features_in_
-            result["feature_count"] = raw_feature_count
+            # TRUE COUNT of features
+            result["feature_count"] = pre.n_features_in_
 
-            # TRUE raw feature names
+            # TRUE RAW feature names
             if hasattr(pre, "feature_names_in_"):
-                raw_features = list(pre.feature_names_in_)
+                result["feature_names"] = list(pre.feature_names_in_)
             else:
-                raw_features = [f"feature_{i+1}" for i in range(raw_feature_count)]
-
-            result["feature_names"] = raw_features
-
-            print("[DEBUG] TRUE RAW FEATURE COUNT:", raw_feature_count)
-            print("[DEBUG] TRUE RAW FEATURE NAMES:", raw_features)
+                result["feature_names"] = [
+                    f"feature_{i+1}" for i in range(pre.n_features_in_)
+                ]
 
         else:
-            print("[ERROR] Preprocessor hex missing from AutoML result!")
+            # fallback
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(df.columns) - 1
-
-        print("[DEBUG] Final Feature Names Returned to FE:", result["feature_names"])
 
         return sanitize({
             "status": "success",
@@ -148,7 +139,7 @@ async def create_model(request: Request):
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"create_model failed: {str(e)}")
+        raise HTTPException(500, f"/create_model failed: {str(e)}")
 
 
 # ============================================================
@@ -156,16 +147,19 @@ async def create_model(request: Request):
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
+
     try:
         body = await request.json()
-        ds = body.get("dataset") or body.get("data")
 
         docs = body.get("documents")
         config = body.get("config", {})
 
         if docs is None:
-            df = normalize_dataset(ds)
+            df = normalize_dataset(body.get("dataset") or body.get("data"))
             docs = df_to_sentences(df)
+
+        if isinstance(docs, str):
+            docs = [x.strip() for x in docs.split("\n") if x.strip()]
 
         result = engine.run("create_llm", {"documents": docs, "config": config})
 
@@ -176,7 +170,7 @@ async def create_llm(request: Request):
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"create_llm failed: {str(e)}")
+        raise HTTPException(500, f"/create_llm failed: {str(e)}")
 
 
 # ============================================================
@@ -184,14 +178,15 @@ async def create_llm(request: Request):
 # ============================================================
 @app.post("/llm_inference")
 async def llm_inference(request: Request):
+
     try:
         body = await request.json()
 
         llm_package = body.get("llm_package") or LLM_CACHE
-        if llm_package is None:
-            raise Exception("LLM Package missing. Use /create_llm first.")
+        if not llm_package:
+            raise Exception("LLM Package missing")
 
-        prompt = body.get("prompt") or body.get("message")
+        prompt = body.get("prompt") or body.get("message") or body.get("query")
         if not prompt:
             raise Exception("Prompt missing")
 
@@ -204,16 +199,18 @@ async def llm_inference(request: Request):
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"LLM inference failed: {str(e)}")
+        raise HTTPException(500, f"/llm_inference failed: {str(e)}")
 
 
 # ============================================================
-# KNOWLEDGE GENERATOR
+# KNOWLEDGE GENERATION
 # ============================================================
 @app.post("/dataset_to_knowledge")
 async def dataset_to_knowledge(request: Request):
+
     try:
         body = await request.json()
+
         df = normalize_dataset(body.get("dataset") or body.get("data"))
 
         if df.empty:
@@ -225,20 +222,17 @@ async def dataset_to_knowledge(request: Request):
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"dataset_to_knowledge failed: {str(e)}")
+        raise HTTPException(500, f"/dataset_to_knowledge failed: {str(e)}")
 
 
 # ============================================================
-# PREDICT — FULLY FIXED
+# PREDICT (Fixed)
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
+
     try:
         body = await request.json()
-
-        print("\n========== /predict ==========")
-        print("BODY:", body)
-        print("==============================\n")
 
         model_hex = body.get("model_hex")
         pre_hex = body.get("preprocessor_hex")
@@ -249,29 +243,28 @@ async def predict(request: Request):
         if not pre_hex:
             raise Exception("preprocessor_hex missing")
         if sample_list is None:
-            raise Exception("No sample or features provided")
+            raise Exception("Sample missing")
 
-        sample = np.array(sample_list).reshape(1, -1)
+        # convert to DataFrame — FIXES your previous error
+        sample_df = pd.DataFrame([sample_list])
 
         model = pickle.loads(bytes.fromhex(model_hex))
         pre = pickle.loads(bytes.fromhex(pre_hex))
 
-        expected = pre.n_features_in_
+        if sample_df.shape[1] != pre.n_features_in_:
+            raise Exception(
+                f"Invalid input size. Expected {pre.n_features_in_}, got {sample_df.shape[1]}"
+            )
 
-        print("[DEBUG] Expected raw feature count:", expected)
-        print("[DEBUG] Provided sample count:", sample.shape[1])
-
-        if sample.shape[1] != expected:
-            raise Exception(f"Invalid feature count. Expected {expected}, got {sample.shape[1]}")
-
-        X = pre.transform(sample)
+        # transform + predict
+        X = pre.transform(sample_df)
         pred = model.predict(X)
 
         return {"status": "success", "prediction": pred.tolist()}
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(500, f"predict failed: {str(e)}")
+        raise HTTPException(500, f"/predict failed: {str(e)}")
 
 
 # ============================================================
