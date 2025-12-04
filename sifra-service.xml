@@ -1,0 +1,14 @@
+<service>
+  <id>SIFRASvc</id>
+  <name>SIFRA AI Brain Service</name>
+  <description>SIFRA AI Backend Server</description>
+
+  <executable>C:\Windows\System32\cmd.exe</executable>
+  <arguments>/c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat</arguments>
+  <workingdirectory>D:\sifra-ai-brain\SIFRA_AI_REGEN</workingdirectory>
+
+  <logpath>D:\sifra-ai-brain\SIFRA_AI_REGEN\logs</logpath>
+  <log mode="roll-by-size">
+    <size>2000000</size>
+  </log>
+</service>

@@ -3,14 +3,14 @@
 import json
 from data.dataset_loader import DatasetLoader
 
-# Old DS task engines
+# OLD engines
 from tasks.auto_analyze import AutoAnalyze
 from tasks.auto_predict import AutoPredict
 from tasks.auto_forecast import AutoForecast
 from tasks.auto_anomaly import AutoAnomaly
 from tasks.auto_insights import AutoInsights
 
-# New extended DS engines
+# NEW engines
 from tasks.auto_visualize import AutoVisualize
 from tasks.auto_eda import AutoEDA
 from tasks.auto_feature_engineering import AutoFeatureEngineering
@@ -21,15 +21,33 @@ from tasks.auto_bigdata import AutoBigData
 from ui.dashboard import Dashboard
 from core.engine_router import EngineRouter
 
+# UNIFIED ENGINE (HDP + HDS + NAREX + ML)
+from core.sifra_unified import SIFRAUnifiedEngine
 
+
+# ===============================================================
+# SAFE input evaluator
+# ===============================================================
 def safe_eval(expr):
-    """Safely evaluate user input to avoid crashes."""
-    try:
-        return eval(expr)
-    except Exception:
-        raise ValueError("Invalid input format. Use Python list or dict format.")
+    """
+    Only evaluates Python list or dict.
+    Otherwise returns raw string (file path or query).
+    """
+    expr = expr.strip()
+
+    if (expr.startswith("[") and expr.endswith("]")) or \
+       (expr.startswith("{") and expr.endswith("}")):
+        try:
+            return eval(expr)
+        except Exception:
+            raise ValueError("Invalid list/dict format.")
+
+    return expr  # treat as file path string
 
 
+# ===============================================================
+# MAIN APPLICATION
+# ===============================================================
 def main():
 
     print("\n===============================")
@@ -57,210 +75,188 @@ def main():
 
     router = EngineRouter()
 
+    # UNIFIED BRAIN ENGINE
+    unified_engine = SIFRAUnifiedEngine()
+
+    # ===============================================================
+    # MAIN LOOP
+    # ===============================================================
     while True:
 
         print("\n========== SIFRA AI DASHBOARD ==========")
-        print(" 1. Auto Analyze")
-        print(" 2. Auto Predict")
-        print(" 3. Auto Forecast")
-        print(" 4. Auto Anomaly Detection")
-        print(" 5. Auto Insights")
-        print(" 6. Trend Extraction")
-
-        print(" 7. Auto Visualization")
-        print(" 8. Auto EDA")
-        print(" 9. Auto Feature Engineering")
-        print("10. Auto Model Builder")
-        print("11. Auto Evaluation")
-        print("12. Auto Big Data Processing")
-
-        print("13. Load Dataset File")
-        print("14. Exit")
+        print(" 1.  Auto Analyze")
+        print(" 2.  Auto Predict")
+        print(" 3.  Auto Forecast")
+        print(" 4.  Auto Anomaly Detection")
+        print(" 5.  Auto Insights")
+        print(" 6.  Trend Extraction")
+        print(" 7.  Auto Visualization")
+        print(" 8.  Auto EDA")
+        print(" 9.  Auto Feature Engineering")
+        print("10.  Auto Model Builder")
+        print("11.  Auto Evaluation")
+        print("12.  Auto Big Data Processing")
+        print("13.  Load Dataset File")
+        print("14.  Exit")
+        print("15.  SIFRA Full-Brain Pipeline (HDP + HDS + NAREX + AutoML)")
         print("========================================")
 
-        choice = input("\nEnter choice: ")
+        choice = input("\nEnter choice: ").strip()
 
-        # 1️⃣ Auto Analyze
+        # ===========================================================
+        # OLD TOOLS
+        # ===========================================================
+
         if choice == "1":
-            print("\n[INPUT] Enter dataset (Python list):")
-            data = input("Dataset: ")
+            print("\n[INPUT] Enter dataset:")
             try:
-                dataset = loader.load_raw(safe_eval(data))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
                 result = analyzer.run(dataset)
                 dashboard.show_analysis_result(result)
             except Exception as e:
-                print("[ERROR] Invalid dataset:", e)
+                print("[ERROR] Auto-Analyze error:", e)
 
-        # 2️⃣ Auto Predict
         elif choice == "2":
             print("\n[INPUT] Dataset for prediction")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
-                result = predictor.run(dataset)
-                print("\n===== PREDICTION RESULT =====")
-                print(json.dumps(result, indent=2))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
+                print(json.dumps(predictor.run(dataset), indent=2))
             except Exception as e:
-                print("[ERROR] Invalid dataset:", e)
+                print("[ERROR] Prediction error:", e)
 
-        # 3️⃣ Auto Forecast
         elif choice == "3":
             print("\n[INPUT] Dataset for forecasting")
-            data = input("Dataset: ")
-            steps = input("Steps (default=5): ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
+                data = safe_eval(input("Dataset: "))
+                steps = input("Steps (default=5): ").strip()
+                dataset = loader.load_raw(data)
                 steps = int(steps) if steps else 5
-                result = forecaster.run(dataset, steps)
-                print("\n===== FORECAST RESULT =====")
-                print(json.dumps(result, indent=2))
+                print(json.dumps(forecaster.run(dataset, steps), indent=2))
             except Exception as e:
                 print("[ERROR] Forecast error:", e)
 
-        # 4️⃣ Auto Anomaly Detection
         elif choice == "4":
             print("\n[INPUT] Dataset for anomaly detection")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
-                result = anomaly_detector.run(dataset)
-                print("\n===== ANOMALY REPORT =====")
-                print(json.dumps(result, indent=2))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
+                print(json.dumps(anomaly_detector.run(dataset), indent=2))
             except Exception as e:
-                print("[ERROR] Invalid dataset:", e)
+                print("[ERROR] Anomaly error:", e)
 
-        # 5️⃣ Auto Insights
         elif choice == "5":
             print("\n[INPUT] Dataset for insights")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
                 result = insight_engine.run(dataset)
-                print("\n===== INSIGHTS =====")
                 for line in result["insights"]:
                     print("-", line)
             except Exception as e:
-                print("[ERROR] Invalid dataset:", e)
+                print("[ERROR] Insight error:", e)
 
-        # 6️⃣ Trend Extraction
         elif choice == "6":
             print("\n[INPUT] Dataset for trend extraction")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
                 score = router.route("trend", dataset)
-                print("\nTrend Score:", score)
+                print("Trend Score:", score)
             except Exception as e:
-                print("[ERROR] Invalid dataset:", e)
+                print("[ERROR] Trend error:", e)
 
-        # 7️⃣ Auto Visualization
         elif choice == "7":
             print("\n[INPUT] Dataset for visualization")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
-                result = visualizer.run(dataset)
-                print("\n===== VISUALIZATION SPECS =====")
-                print(json.dumps(result, indent=2))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
+                print(json.dumps(visualizer.run(dataset), indent=2))
             except Exception as e:
                 print("[ERROR] Visualization error:", e)
 
-        # 8️⃣ Auto EDA
         elif choice == "8":
             print("\n[INPUT] Dataset for EDA")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
-                result = eda_engine.run(dataset)
-                print("\n===== EDA REPORT =====")
-                print(json.dumps(result, indent=2))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
+                print(json.dumps(eda_engine.run(dataset), indent=2))
             except Exception as e:
                 print("[ERROR] EDA error:", e)
 
-        # 9️⃣ Auto Feature Engineering
         elif choice == "9":
             print("\n[INPUT] Dataset for Feature Engineering")
-            data = input("Dataset: ")
             try:
-                dataset = loader.load_raw(safe_eval(data))
-                result = feature_engineer.run(dataset)
-                print("\n===== FEATURE ENGINEERING RESULT =====")
-                print(json.dumps(result, indent=2))
+                dataset = loader.load_raw(safe_eval(input("Dataset: ")))
+                print(json.dumps(feature_engineer.run(dataset), indent=2))
             except Exception as e:
                 print("[ERROR] Feature engineering error:", e)
 
-        # 🔟 Auto Model Builder
         elif choice == "10":
-            print("\nEnter X (features): ")
+            print("\nEnter X (features):")
             X = safe_eval(input("X: "))
-            print("\nEnter y (labels): ")
+            print("\nEnter y (labels):")
             y = safe_eval(input("y: "))
             try:
-                result = model_engine.run(X, y)
-                print("\n===== MODEL RESULT =====")
-                print(json.dumps(result, indent=2))
+                print(json.dumps(model_engine.run(X, y), indent=2))
             except Exception as e:
-                print("[ERROR] Model building error:", e)
+                print("[ERROR] Model builder error:", e)
 
-        # 1️⃣1️⃣ Auto Evaluate
         elif choice == "11":
             print("\nEnter true labels:")
             y_true = safe_eval(input("y_true: "))
-            print("\nEnter predicted labels:")
+            print("Enter predicted labels:")
             y_pred = safe_eval(input("y_pred: "))
-
             try:
-                result = evaluator.run(y_true, y_pred)
-                print("\n===== EVALUATION RESULT =====")
-                print(json.dumps(result, indent=2))
+                print(json.dumps(evaluator.run(y_true, y_pred), indent=2))
             except Exception as e:
                 print("[ERROR] Evaluation error:", e)
 
-        # 1️⃣2️⃣ Auto Big Data Processing
         elif choice == "12":
             print("\nEnter big CSV file path:")
-            path = input("File path: ").strip()
-
             try:
-                result = bigdata_engine.run(path)
-                print("\n===== BIGDATA RESULT =====")
-                print(json.dumps(result, indent=2))
+                print(json.dumps(bigdata_engine.run(input("File path: ").strip()), indent=2))
             except Exception as e:
-                print("[ERROR] BigData processing error:", e)
+                print("[ERROR] Big Data error:", e)
 
-        # 1️⃣3️⃣ Load dataset file
         elif choice == "13":
-            print("\nChoose file type:")
-            print("1. CSV")
-            print("2. Excel")
-            print("3. JSON")
+            print("\nChoose file: 1=CSV, 2=Excel, 3=JSON")
             ft = input("File type: ")
             path = input("File path: ")
 
             try:
-                if ft == "1":
-                    data = loader.load_csv(path)
-                elif ft == "2":
-                    data = loader.load_excel(path)
-                elif ft == "3":
-                    data = loader.load_json(path)
+                if ft == "1": data = loader.load_csv(path)
+                elif ft == "2": data = loader.load_excel(path)
+                elif ft == "3": data = loader.load_json(path)
                 else:
-                    print("[ERROR] Invalid format.")
+                    print("[ERROR] Invalid file type.")
                     continue
 
-                print("\n[RESULT] Loaded dataset:")
+                print("\nLoaded dataset:")
                 print(data)
-
             except Exception as e:
-                print("[ERROR] Could not load file:", e)
+                print("[ERROR] File load error:", e)
 
-        # 1️⃣4️⃣ Exit
         elif choice == "14":
-            print("\n[EXIT] Shutting down SIFRA AI. Goodbye!")
+            print("\n[EXIT] Goodbye!")
             break
 
+        # ===========================================================
+        # FULL BRAIN PIPELINE (HDP + HDS + NAREX + ML)
+        # ===========================================================
+        elif choice == "15":
+            print("\n[UNIFIED] Enter dataset (list, dict, API config, DB config, or file path):")
+            raw = input("Dataset: ").strip()
+
+            print("\nEnter GOAL (analyze / predict / forecast / anomaly / model / insights):")
+            goal = input("Goal: ").strip().lower()
+
+            try:
+                data = safe_eval(raw)
+                result = unified_engine.run(goal, data)
+
+                print("\n===== SIFRA FULL-BRAIN OUTPUT =====")
+                print(json.dumps(result, indent=2))
+
+            except Exception as e:
+                print("[ERROR] Unified pipeline error:", e)
+
         else:
-            print("\n[ERROR] Invalid choice, try again.")
+            print("\n[ERROR] Invalid choice. Try again.")
 
 
 if __name__ == "__main__":

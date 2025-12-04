@@ -1,0 +1,44 @@
+2025-12-01 13:22:46,881 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,881 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,881 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,881 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,881 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,897 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,897 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:22:46,897 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 13:26:01,632 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+C:\Users\HP\AppData\Local\Programs\Python\Python310\python.exe: can't open file 'D:\\sifra-ai-brain\\SIFRA_AI_REGEN\\api_server.py': [Errno 2] No such file or directory
+C:\Users\HP\AppData\Local\Programs\Python\Python310\python.exe: can't open file 'D:\\sifra-ai-brain\\SIFRA_AI_REGEN\\api_server.py': [Errno 2] No such file or directory
+2025-12-01 18:59:58,371 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-01 18:59:58,373 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+2025-12-02 08:46:49,152 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-02 08:46:49,166 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+2025-12-02 19:51:03,891 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-02 19:51:03,891 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+2025-12-02 21:26:57,494 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-02 21:26:57,494 | SIFRA_UNIFIED | INFO | Unified Engine Initialized
+2025-12-03 08:10:31,182 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 08:10:31,183 | SIFRA_UNIFIED | INFO | Unified Engine Initialized (AutoML v5.1 + LLM Mode)
+2025-12-03 11:35:26,885 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 11:35:26,885 | SIFRA_UNIFIED | INFO | Unified Engine Initialized (AutoML v5.2 + NAREX Brain + Synthetic LLM + Auto-Knowledge)
+2025-12-03 20:16:18,476 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 20:16:18,478 | SIFRA_UNIFIED | INFO | Unified Engine Loaded (v7.2-FINAL-FIXED)
+2025-12-03 21:13:58,562 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 21:13:58,564 | SIFRA_UNIFIED | INFO | Unified Engine Loaded (v7.2-FINAL-FIXED)
+2025-12-03 21:43:56,227 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 21:43:56,228 | SIFRA_UNIFIED | INFO | Unified Engine Loaded (v7.2-FINAL-FIXED)
+2025-12-03 23:01:00,039 | SIFRA_CORE | INFO | SIFRA CORE initialized successfully.
+2025-12-03 23:01:00,039 | SIFRA_UNIFIED | INFO | Unified Engine Loaded (v7.2-FINAL-FIXED)
+2025-12-04 07:49:12,385 | SIFRA_CORE | INFO | SIFRA CORE v4.0 initialized successfully.
+2025-12-04 07:49:12,385 | SIFRA_UNIFIED_8 | INFO | Unified Engine Loaded (v8.0 ENTERPRISE)
+2025-12-04 12:37:05,205 | SIFRA_CORE | INFO | SIFRA CORE v4.0 initialized successfully.
+2025-12-04 12:37:05,205 | SIFRA_UNIFIED_8 | INFO | Unified Engine Loaded (v8.0 ENTERPRISE)
+2025-12-04 16:56:58,832 | SIFRA_CORE | INFO | SIFRA CORE v4.0 initialized successfully.
+2025-12-04 18:29:52,248 | SIFRA_CORE | INFO | SIFRA CORE v4.0 initialized successfully.

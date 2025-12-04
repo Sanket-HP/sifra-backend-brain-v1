@@ -1,0 +1,65 @@
+at frontend add AI Explanation at this <!-- Content Views -->
+                    <div class="flex-1 bg-slate-950/50 relative overflow-hidden">
+                        
+                        <!-- Empty State -->
+                        <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-700 z-0">
+                            <i class="fas fa-cube text-6xl mb-4 opacity-20"></i>
+                            <p class="text-sm font-mono opacity-50">AWAITING_INPUT_STREAM</p>
+                        </div>
+
+                        <!-- 1. Visuals Tab -->
+                        <div id="view-visuals" class="absolute inset-0 p-6 overflow-y-auto hidden z-10 custom-scrollbar space-y-6">
+                            <!-- Chart Container -->
+                            <div class="h-64 w-full bg-slate-900/50 rounded-lg border border-white/5 p-4 relative">
+                                <h4 class="text-[10px] font-bold text-slate-500 mb-2 uppercase">Main Visualization</h4>
+                                <canvas id="mainChart"></canvas>
+                            </div>
+                            
+                            <!-- Heatmap Container -->
+                            <div class="w-full bg-slate-900/50 rounded-lg border border-white/5 p-4">
+                                <h4 class="text-[10px] font-bold text-slate-500 mb-4 uppercase">Correlation Heatmap</h4>
+                                <div id="heatmapGrid" class="grid gap-1 w-full overflow-x-auto">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Stats Tab -->
+                        <div id="view-stats" class="absolute inset-0 p-6 overflow-y-auto hidden z-10 custom-scrollbar">
+                            <div class="w-full bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-800 text-[10px] uppercase text-slate-400 font-bold">
+                                        <tr>
+                                            <th class="p-3 border-b border-slate-700">Column</th>
+                                            <th class="p-3 border-b border-slate-700">Type</th>
+                                            <th class="p-3 border-b border-slate-700">Min</th>
+                                            <th class="p-3 border-b border-slate-700">Max</th>
+                                            <th class="p-3 border-b border-slate-700">Mean</th>
+                                            <th class="p-3 border-b border-slate-700">Missing</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="statsTableBody" class="text-xs font-mono text-slate-300 divide-y divide-slate-800">
+                                        <!-- JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 3. Insights Tab -->
+                        <div id="view-insights" class="absolute inset-0 p-6 overflow-y-auto hidden z-10 custom-scrollbar">
+                            <div id="insightsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- JS Cards -->
+                            </div>
+                        </div>
+
+                        <!-- 4. JSON Tab -->
+                        <div id="view-json" class="absolute inset-0 p-0 overflow-hidden hidden z-10">
+                            <pre id="jsonContent" class="w-full h-full p-6 text-xs font-mono text-cyan-100 overflow-auto custom-scrollbar"></pre>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+and give me complete updated code file 
