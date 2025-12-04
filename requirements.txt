@@ -1,7 +1,9 @@
-flask
-flask-cors
+pydantic
+joblib
 numpy
 pandas
 openpyxl
 scikit-learn
 uvicorn[standard]
+fastapi
+requests
