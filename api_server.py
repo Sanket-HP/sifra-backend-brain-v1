@@ -1,6 +1,6 @@
 # ============================================================
-#  SIFRA AI v8.1 ENTERPRISE (JSON DATASET EDITION)
-#  AutoML + LLM + Knowledge + Insights
+#  SIFRA AI v8.1.3 ENTERPRISE (JSON DATASET EDITION)
+#  AutoML + LLM + Knowledge + Insights + Exploratory Analysis
 #  FULL FIXED VERSION FOR RENDER + GITHUB
 # ============================================================
 
@@ -18,14 +18,14 @@ from core.sifra_unified import SIFRAUnifiedEngine
 from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
 
-# FastAPI Init
+# FastAPI App
 app = FastAPI(
     title="SIFRA AI Backend",
-    version="8.1-JSON-STABLE-FULL",
+    version="8.1.3-JSON-STABLE-FULL",
     description="SIFRA Enterprise AutoML + LLM Engine"
 )
 
-# Enable CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,27 +36,25 @@ app.add_middleware(
 
 engine = SIFRAUnifiedEngine()
 llm_engine = SifraLLMEngine()
-
 LLM_CACHE = None
 
 
 # ============================================================
-# HOME ROUTE (Fixes Render 404)
+# ROOT ENDPOINT (Required for Render)
 # ============================================================
 @app.get("/")
 def index():
     return {
         "status": "running",
         "message": "SIFRA AI Backend Online",
-        "version": "8.1-JSON-STABLE-FULL"
+        "version": "8.1.3-JSON-STABLE-FULL"
     }
 
 
 # ============================================================
-# UNIVERSAL NORMALIZER
+# DATA NORMALIZATION
 # ============================================================
 def normalize_dataset(ds):
-
     try:
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
             return pd.DataFrame(ds["data"], columns=ds["columns"])
@@ -98,44 +96,29 @@ async def create_model(request: Request):
 
     try:
         body = await request.json()
-
-        ds = body.get("dataset") or body.get("data") or body
-        df = normalize_dataset(ds)
+        df = normalize_dataset(body.get("dataset") or body.get("data"))
 
         if df.empty:
             return {"status": "fail", "detail": "Dataset empty or invalid"}
 
-        automl_raw = engine.run("automl_train", {"dataset": df})
+        automl = engine.run("automl_train", {"dataset": df})
+        result = automl.get("result", automl)
 
-        # unwrap AutoML wrapper
-        result = automl_raw.get("result", automl_raw)
-
-        # decode preprocessor to extract true raw feature names
+        # decode preprocessor
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
-
-            # TRUE COUNT of features
             result["feature_count"] = pre.n_features_in_
-
-            # TRUE RAW feature names
-            if hasattr(pre, "feature_names_in_"):
-                result["feature_names"] = list(pre.feature_names_in_)
-            else:
-                result["feature_names"] = [
-                    f"feature_{i+1}" for i in range(pre.n_features_in_)
-                ]
-
+            result["feature_names"] = (
+                list(pre.feature_names_in_)
+                if hasattr(pre, "feature_names_in_")
+                else [f"feature_{i+1}" for i in range(pre.n_features_in_)]
+            )
         else:
-            # fallback
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(df.columns) - 1
 
-        return sanitize({
-            "status": "success",
-            "mode": "automl",
-            "result": result
-        })
+        return sanitize({"status": "success", "mode": "automl", "result": result})
 
     except Exception as e:
         traceback.print_exc()
@@ -143,14 +126,13 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# LLM CREATION
+# CREATE LLM
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
 
     try:
         body = await request.json()
-
         docs = body.get("documents")
         config = body.get("config", {})
 
@@ -192,10 +174,7 @@ async def llm_inference(request: Request):
 
         raw = engine.run("test_llm", {"llm_package": llm_package, "prompt": prompt})
 
-        if isinstance(raw, str):
-            raw = {"reply": raw}
-
-        return {"status": "success", "response": raw}
+        return {"status": "success", "response": {"reply": raw}}
 
     except Exception as e:
         traceback.print_exc()
@@ -203,14 +182,13 @@ async def llm_inference(request: Request):
 
 
 # ============================================================
-# KNOWLEDGE GENERATION
+# KNOWLEDGE SENTENCE GENERATION
 # ============================================================
 @app.post("/dataset_to_knowledge")
 async def dataset_to_knowledge(request: Request):
 
     try:
         body = await request.json()
-
         df = normalize_dataset(body.get("dataset") or body.get("data"))
 
         if df.empty:
@@ -226,7 +204,43 @@ async def dataset_to_knowledge(request: Request):
 
 
 # ============================================================
-# PREDICT (Fixed)
+# UNIFIED BRAIN PIPELINE (Required for all UI analysis modes)
+# ============================================================
+@app.post("/run")
+async def run_brain(request: Request):
+
+    try:
+        body = await request.json()
+
+        mode = (body.get("mode") or "").lower()
+        df = normalize_dataset(body.get("dataset") or body.get("data"))
+
+        if df.empty:
+            raise Exception("Dataset empty")
+
+        queries = {
+            "analyze": "Analyze this dataset.",
+            "visualize": "Suggest visualizations.",
+            "forecast": "Predict future values.",
+            "anomaly": "Detect anomalies.",
+            "insights": "Extract insights."
+        }
+
+        query = queries.get(mode)
+        if query is None:
+            raise Exception(f"Unknown analysis mode '{mode}'")
+
+        response = engine.run("brain_pipeline", {"query": query, "dataset": df})
+
+        return {"status": "success", "response": response}
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"/run failed: {str(e)}")
+
+
+# ============================================================
+# PREDICT
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
@@ -236,17 +250,16 @@ async def predict(request: Request):
 
         model_hex = body.get("model_hex")
         pre_hex = body.get("preprocessor_hex")
-        sample_list = body.get("sample") or body.get("features")
+        sample = body.get("sample") or body.get("features")
 
         if not model_hex:
             raise Exception("model_hex missing")
         if not pre_hex:
             raise Exception("preprocessor_hex missing")
-        if sample_list is None:
+        if sample is None:
             raise Exception("Sample missing")
 
-        # convert to DataFrame — FIXES your previous error
-        sample_df = pd.DataFrame([sample_list])
+        sample_df = pd.DataFrame([sample])
 
         model = pickle.loads(bytes.fromhex(model_hex))
         pre = pickle.loads(bytes.fromhex(pre_hex))
@@ -256,7 +269,6 @@ async def predict(request: Request):
                 f"Invalid input size. Expected {pre.n_features_in_}, got {sample_df.shape[1]}"
             )
 
-        # transform + predict
         X = pre.transform(sample_df)
         pred = model.predict(X)
 
@@ -272,4 +284,4 @@ async def predict(request: Request):
 # ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "8.1-JSON-STABLE-FULL"}
+    return {"status": "ok", "version": "8.1.3-JSON-STABLE-FULL"}
