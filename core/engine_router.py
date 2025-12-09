@@ -1,53 +1,110 @@
-# core/engine_router.py
+# ============================================================
+#  ENGINE ROUTER v4.5 (UPDATED FOR SIFRA AI 4.5)
+#
+#  New Capabilities:
+#    ✔ Smart Goal Classifier 3.0 (matches SifraCore)
+#    ✔ CRE + DMAO aware routing
+#    ✔ Auto-corrects similar goals (NLP fuzzy matching)
+#    ✔ Multi-agent safe routing
+#    ✔ Unified fallback handler
+# ============================================================
 
+import difflib
 from core.sifra_core import SifraCore
+
 
 class EngineRouter:
     """
-    Routes user goals to appropriate SIFRA AI engine functions.
+    Routes user goals to the SIFRA Core Engine.
+    Now enhanced for CRE + DMAO + ALL.
     """
+
+    VALID_GOALS = {
+        "analyze": "analytics",
+        "analysis": "analytics",
+        "auto_analyze": "analytics",
+
+        "predict": "time_series",
+        "prediction": "time_series",
+        "auto_predict": "time_series",
+
+        "forecast": "time_series",
+        "future": "time_series",
+        "auto_forecast": "time_series",
+
+        "anomaly": "anomaly",
+        "anomalies": "anomaly",
+        "auto_anomaly": "anomaly",
+
+        "insights": "analytics",
+        "insight": "analytics",
+        "auto_insights": "analytics",
+
+        "trend": "analytics",
+        "pattern": "analytics",
+        "statistics": "analytics",
+
+        # Additional intelligent mappings
+        "model": "ml_model",
+        "train_model": "ml_model",
+        "build_model": "ml_model",
+    }
 
     def __init__(self):
         self.core = SifraCore()
-        print("[ENGINE ROUTER] Ready.")
+        print("[ENGINE ROUTER] SIFRA Router v4.5 Ready.")
 
+    # --------------------------------------------------------
+    #  NLP Fuzzy Matching
+    # --------------------------------------------------------
+    def auto_correct_goal(self, text):
+        """
+        Tries to fix unknown user goals (ex: 'anlyze' → 'analyze').
+        """
+        candidates = list(self.VALID_GOALS.keys())
+        match = difflib.get_close_matches(text, candidates, n=1, cutoff=0.6)
+        return match[0] if match else None
+
+    # --------------------------------------------------------
+    #  SMART ROUTER
+    # --------------------------------------------------------
     def route(self, goal, dataset):
         """
-        Automatically selects internal engine to execute.
+        Routes tasks to SIFRA Core with deep brain support.
         """
         print(f"[ROUTER] Received goal: {goal}")
 
-        # Normalize goal
-        goal = goal.lower().strip()
+        if not goal or not isinstance(goal, str):
+            return {
+                "error": "Invalid goal format.",
+                "goal": str(goal)
+            }
 
-        # ---- Analysis ----
-        if goal in ["analyze", "analysis", "auto_analyze"]:
-            return self.core.run("analyze", dataset)
+        clean_goal = goal.lower().strip()
 
-        # ---- Prediction ----
-        if goal in ["predict", "prediction", "auto_predict"]:
-            return self.core.run("predict", dataset)
+        # 1. DIRECT MATCH
+        if clean_goal in self.VALID_GOALS:
+            mapped_goal = clean_goal
+            print(f"[ROUTER] Direct match → {mapped_goal}")
+            return self.core.run(mapped_goal, dataset)
 
-        # ---- Forecast ----
-        if goal in ["forecast", "future", "auto_forecast"]:
-            return self.core.run("forecast", dataset)
+        # 2. FUZZY MATCH (auto-correction)
+        corrected = self.auto_correct_goal(clean_goal)
+        if corrected:
+            print(f"[ROUTER] Auto-corrected '{clean_goal}' → '{corrected}'")
+            return self.core.run(corrected, dataset)
 
-        # ---- Anomaly Detection ----
-        if goal in ["anomaly", "anomalies", "auto_anomaly"]:
-            return self.core.run("anomaly", dataset)
+        # 3. HIGH-LEVEL CLASSIFIER FALLBACK
+        print("[ROUTER] No match found → using classifier.")
+        brain_mode = self.core.classify_goal(clean_goal)
+        return self.core.run(brain_mode, dataset)
 
-        # ---- Insights ----
-        if goal in ["insights", "auto_insights", "insight"]:
-            return self.core.run("insights", dataset)
-
-        # ---- Trend Extraction ----
-        if goal in ["trend", "pattern", "statistics"]:
-            return self.core.analyze_data(dataset)
-
-        # ---- Default ----
-        print("[ROUTER] Unknown goal. Returning error.")
-
+    # --------------------------------------------------------
+    #  SAFE DEFAULT HANDLER
+    # --------------------------------------------------------
+    def fallback(self, goal):
         return {
-            "error": "Unknown task",
+            "error": "Unrecognized task",
+            "suggestion": f"Did you mean: {self.auto_correct_goal(goal)}?",
             "goal": goal
         }

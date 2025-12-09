@@ -103,3 +103,23 @@
 2025-12-04 18:29:48,093 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
 2025-12-04 18:29:48,140 INFO  - Started process 7604
 2025-12-04 18:29:48,156 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-05 09:01:53,640 DEBUG - Starting WinSW in service mode
+2025-12-05 09:01:53,914 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-05 09:01:53,962 INFO  - Started process 7720
+2025-12-05 09:01:53,979 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-05 20:26:13,102 DEBUG - Starting WinSW in service mode
+2025-12-05 20:26:13,409 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-05 20:26:13,456 INFO  - Started process 7648
+2025-12-05 20:26:13,471 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-06 09:42:25,313 DEBUG - Starting WinSW in service mode
+2025-12-06 09:42:25,602 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-06 09:42:25,653 INFO  - Started process 7588
+2025-12-06 09:42:25,668 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-07 12:12:08,533 DEBUG - Starting WinSW in service mode
+2025-12-07 12:12:08,852 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-07 12:12:08,896 INFO  - Started process 7684
+2025-12-07 12:12:08,912 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-09 12:07:17,585 DEBUG - Starting WinSW in service mode
+2025-12-09 12:07:17,873 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-09 12:07:17,927 INFO  - Started process 7716
+2025-12-09 12:07:17,943 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender

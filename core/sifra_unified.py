@@ -1,16 +1,19 @@
 # ============================================================
-#   SIFRA Unified Intelligence Engine v9.4 (ENTERPRISE HYBRID MODE)
-#   FINAL VERSION – Smart Dataset Brain + LLM Hybrid + Safe Numeric Engine
+#   SIFRA Unified Intelligence Engine v10.0 (ENTERPRISE COGNITIVE MODE)
 #
-#   Major Features:
-#       ✓ Smart Intent Detection for Data Questions
-#       ✓ Professional Dataset Summary System
-#       ✓ Automatic Numeric Conversion (Crash-Proof)
-#       ✓ Fully Safe Business Insights
-#       ✓ Hybrid LLM: explain() + vector fallback
-#       ✓ Auto-dataset detection (docs → CSV)
-#       ✓ Debug Mode
-#       ✓ FE-Compatible AutoML Response Wrapper   ★ NEW
+#   Integrates:
+#       ✓ SifraCore (HDP + HDS + NAREX + CRE + DMAO + ALL)
+#       ✓ AutoML v8.1.2
+#       ✓ Synthetic LLM Engine v4.5
+#       ✓ Dataset → Knowledge Engine v9.0
+#       ✓ Enterprise Data Summary System
+#       ✓ FE-Compatible Responses
+#
+#   Supports:
+#       • create_llm
+#       • test_llm
+#       • automl_train
+#       • brain_pipeline
 # ============================================================
 
 import pandas as pd
@@ -19,6 +22,7 @@ import traceback
 
 from core.sifra_core import SifraCore
 from utils.logger import SifraLogger
+
 from tasks.auto_modeler import AutoModeler
 from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
@@ -31,13 +35,21 @@ class SIFRAUnifiedEngine:
     # ------------------------------------------------------------
     def __init__(self):
         self.debug = True
-        self.log = SifraLogger("SIFRA_UNIFIED_9_4")
+        self.log = SifraLogger("SIFRA_UNIFIED_10_0")
+
+        # Core Cognitive Engine
         self.core = SifraCore()
+
+        # AutoML
         self.modeler = AutoModeler()
+
+        # LLM Engine
         self.llm_engine = SifraLLMEngine()
 
+        # Dataset Context Memory
         self.active_df = None
-        self._dbg("Unified Engine Loaded (v9.4 ENTERPRISE MODE)")
+
+        self._dbg("Unified Engine Loaded (v10.0 Cognitive Mode)")
 
     def _dbg(self, *msg):
         if self.debug:
@@ -54,23 +66,24 @@ class SIFRAUnifiedEngine:
             if src is None:
                 return pd.DataFrame()
 
+            # DataFrame directly
             if isinstance(src, pd.DataFrame):
-                return src
+                return src.copy()
 
-            # JSON table format
+            # JSON style: {columns: [], data: []}
             if isinstance(src, dict) and "columns" in src and "data" in src:
                 return pd.DataFrame(src["data"], columns=src["columns"])
 
-            # list-of-dicts
+            # List of dicts
             if isinstance(src, list) and len(src) > 0 and isinstance(src[0], dict):
                 return pd.DataFrame(src)
 
-            # list-of-lists
+            # List of lists
             if isinstance(src, list) and len(src) > 0 and isinstance(src[0], list):
                 cols = [f"col_{i+1}" for i in range(len(src[0]))]
                 return pd.DataFrame(src, columns=cols)
 
-            # CSV raw text
+            # CSV string
             if isinstance(src, str) and "," in src and "\n" in src:
                 return pd.read_csv(StringIO(src))
 
@@ -108,7 +121,7 @@ class SIFRAUnifiedEngine:
             return {"status": "error", "detail": str(e)}
 
     # ------------------------------------------------------------
-    # CREATE LLM – HYBRID DATA MODE
+    # CREATE LLM – HYBRID DATA & KNOWLEDGE MODE
     # ------------------------------------------------------------
     def _handle_create_llm(self, ctx):
 
@@ -118,11 +131,11 @@ class SIFRAUnifiedEngine:
 
         df = None
 
-        # 1. Direct dataset
+        # ---- If dataset exists
         if dataset is not None:
             df = self.load_dataset(dataset)
 
-        # 2. Auto-detect CSV-like docs
+        # ---- Auto-detect CSV-like docs as dataset
         if df is None and isinstance(docs, list) and len(docs) > 3:
             try:
                 if "," in docs[0]:
@@ -131,12 +144,12 @@ class SIFRAUnifiedEngine:
             except:
                 pass
 
-        # 3. Store dataset globally
+        # ---- Save dataset globally
         if df is not None and not df.empty:
             self.active_df = df
             self._dbg("Dataset stored globally")
 
-        # 4. Convert docs → sentences if needed
+        # ---- Convert dataset → knowledge sentences
         if not isinstance(docs, list):
             try:
                 df2 = self.load_dataset(docs)
@@ -144,19 +157,19 @@ class SIFRAUnifiedEngine:
             except:
                 docs = []
 
-        return self.llm_engine.create_llm(config, docs)
+        return self.llm_engine.create_llm(config, docs, df)
 
     # ------------------------------------------------------------
     # ENTERPRISE DATA SUMMARY ENGINE (NUMERIC SAFE)
     # ------------------------------------------------------------
     def _data_summary(self, df: pd.DataFrame):
 
-        # ---- CLEAN NUMERIC COLUMNS SAFELY ----
         df_clean = df.copy()
 
+        # Clean & convert numeric safely
         for col in df_clean.columns:
 
-            # Clean text
+            # Remove commas and whitespace
             df_clean[col] = (
                 df_clean[col]
                 .astype(str)
@@ -164,61 +177,32 @@ class SIFRAUnifiedEngine:
                 .str.strip()
             )
 
-            # Convert numeric only where possible
+            # Try numeric conversion
             df_clean[col] = pd.to_numeric(df_clean[col], errors="ignore")
 
         out = []
 
-        # BASIC SUMMARY
+        # BASIC INFO
         out.append("### 📊 Dataset Summary")
         out.append(f"- Rows: {df_clean.shape[0]}")
         out.append(f"- Columns: {df_clean.shape[1]}")
 
-        # COLUMNS
-        col_names = list(map(str, df_clean.columns))
         out.append("\n### 📌 Columns")
-        out.append(", ".join(col_names))
+        out.append(", ".join(df_clean.columns.astype(str)))
 
         # COLUMN ANALYSIS
-        out.append("\n### 🧱 Column Analysis")
+        out.append("\n### 🧱 Column-Level Analysis")
 
         for col in df_clean.columns:
             s = df_clean[col]
-            col_str = str(col)
 
             if pd.api.types.is_numeric_dtype(s):
                 out.append(
-                    f"**{col_str}** → mean={s.mean():.2f}, min={s.min()}, "
-                    f"max={s.max()}, std={s.std():.2f}"
+                    f"**{col}** → mean={s.mean():.2f}, min={s.min()}, max={s.max()}, std={s.std():.2f}"
                 )
             else:
                 vc = s.value_counts().head(3).to_dict()
-                out.append(f"**{col_str}** → top values: {vc}")
-
-        # NUMERIC INSIGHTS
-        num_cols = [
-            c for c in df_clean.columns
-            if pd.api.types.is_numeric_dtype(df_clean[c])
-        ]
-
-        if num_cols:
-            out.append("\n### 📈 Key Numeric Insights")
-            for c in num_cols[:5]:
-                s = df_clean[c]
-                try:
-                    trend = "increasing" if s.iloc[-1] > s.iloc[0] else "decreasing"
-                except:
-                    trend = "stable"
-                out.append(f"- {str(c)}: trending **{trend}**")
-
-        # BUSINESS INSIGHT (ONLY if numeric)
-        if "Total Profit" in df_clean.columns:
-            s = df_clean["Total Profit"]
-            if pd.api.types.is_numeric_dtype(s):
-                profit = s.sum()
-                out.append(
-                    f"\n### 💰 Business Insight\nTotal Profit: **{profit:,.2f}**"
-                )
+                out.append(f"**{col}** → top values: {vc}")
 
         return "\n".join(out)
 
@@ -229,6 +213,7 @@ class SIFRAUnifiedEngine:
 
         llm_pkg = ctx.get("llm_package")
         prompt = ctx.get("prompt", "").lower()
+
         df = self.active_df
 
         self._dbg("Dataset available?", df is not None)
@@ -236,17 +221,17 @@ class SIFRAUnifiedEngine:
         DATA_KEYWORDS = [
             "summarize", "summary", "column", "columns", "insights",
             "analysis", "analyze", "describe", "statistics", "stats",
-            "trend", "trends", "profit", "revenue", "dataset"
+            "trend", "trends", "profit", "revenue", "dataset", "structure"
         ]
 
         is_data_query = any(k in prompt for k in DATA_KEYWORDS)
 
-        # Dataset question → summary engine
+        # Dataset-related question → summary engine
         if df is not None and not df.empty and is_data_query:
             self._dbg("DATA QUERY → Summary Engine")
             return {"status": "success", "reply": self._data_summary(df)}
 
-        # Dataset exists → use LLM explain
+        # Dataset available → hybrid LLM response
         if df is not None and not df.empty:
             self._dbg("General Query → LLM explain()")
             return {
@@ -254,16 +239,14 @@ class SIFRAUnifiedEngine:
                 "reply": self.llm_engine.explain(prompt, df)
             }
 
-        # No dataset → vector LLM fallback
+        # No dataset → pure LLM inference
         self._dbg("No dataset → Vector LLM")
         raw = self.llm_engine.inference(llm_pkg, prompt)
 
-        if isinstance(raw, dict):
-            return raw
-        return {"status": "success", "reply": str(raw)}
+        return raw if isinstance(raw, dict) else {"status": "success", "reply": str(raw)}
 
     # ------------------------------------------------------------
-    # FIXED AUTOML (FE-Compatible Wrapper)
+    # FE-Compatible AutoML Wrapper
     # ------------------------------------------------------------
     def _handle_automl(self, ctx):
 
@@ -272,7 +255,7 @@ class SIFRAUnifiedEngine:
 
         meta = self.modeler.run(df)
 
-        # the AutoModeler sometimes returns { "result": {...} }
+        # AutoML returns nested result sometimes
         result = meta.get("result", meta)
 
         return {
@@ -291,8 +274,13 @@ class SIFRAUnifiedEngine:
         }
 
     # ------------------------------------------------------------
+    # Full Brain Pipeline (HDP + HDS + NAREX + CRE + DMAO)
+    # ------------------------------------------------------------
     def _handle_brain(self, ctx):
         df = self.load_dataset(ctx.get("dataset"))
         self.active_df = df
-        summary = self._data_summary(df)
-        return {"status": "success", "response": {"reply": summary}}
+
+        brain = self.core.run("analyze", df)
+
+        return {"status": "success", "response": brain}
+# ============================================================

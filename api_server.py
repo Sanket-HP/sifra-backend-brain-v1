@@ -1,7 +1,7 @@
 # ============================================================
-#  SIFRA AI v8.1.3 ENTERPRISE (JSON DATASET EDITION)
-#  AutoML + LLM + Knowledge + Insights + Exploratory Analysis
-#  FULL FIXED VERSION FOR RENDER + GITHUB
+#  SIFRA AI v10.0 ENTERPRISE (COGNITIVE ENGINE EDITION)
+#  AutoML + LLM + Brain Pipeline + Knowledge + Insights
+#  FULLY UPGRADED FOR SIFRA CORE v10.0 (CRE + DMAO + ALL)
 # ============================================================
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,14 +18,18 @@ from core.sifra_unified import SIFRAUnifiedEngine
 from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
 
-# FastAPI App
+# ------------------------------------------------------------
+# FASTAPI INSTANCE
+# ------------------------------------------------------------
 app = FastAPI(
     title="SIFRA AI Backend",
-    version="8.1.3-JSON-STABLE-FULL",
-    description="SIFRA Enterprise AutoML + LLM Engine"
+    version="10.0-Cognitive-Enterprise",
+    description="SIFRA Enterprise Cognitive Engine (AutoML + LLM + Brain)"
 )
 
+# ------------------------------------------------------------
 # CORS
+# ------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,27 +38,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ------------------------------------------------------------
+# GLOBAL ENGINE OBJECTS
+# ------------------------------------------------------------
 engine = SIFRAUnifiedEngine()
 llm_engine = SifraLLMEngine()
 LLM_CACHE = None
 
 
-# ============================================================
-# ROOT ENDPOINT (Required for Render)
-# ============================================================
+# ------------------------------------------------------------
+# ROOT ENDPOINT
+# ------------------------------------------------------------
 @app.get("/")
 def index():
     return {
         "status": "running",
         "message": "SIFRA AI Backend Online",
-        "version": "8.1.3-JSON-STABLE-FULL"
+        "version": "10.0-Cognitive-Enterprise"
     }
 
 
-# ============================================================
-# DATA NORMALIZATION
-# ============================================================
+# ------------------------------------------------------------
+# NORMALIZE DATASET INPUT
+# ------------------------------------------------------------
 def normalize_dataset(ds):
+
     try:
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
             return pd.DataFrame(ds["data"], columns=ds["columns"])
@@ -68,14 +76,14 @@ def normalize_dataset(ds):
 
         return pd.DataFrame()
 
-    except Exception:
+    except:
         traceback.print_exc()
         return pd.DataFrame()
 
 
-# ============================================================
-# SANITIZER
-# ============================================================
+# ------------------------------------------------------------
+# SANITIZER (Fix NaN, Inf)
+# ------------------------------------------------------------
 def sanitize(v):
     if isinstance(v, float):
         if math.isnan(v) or math.isinf(v):
@@ -104,7 +112,7 @@ async def create_model(request: Request):
         automl = engine.run("automl_train", {"dataset": df})
         result = automl.get("result", automl)
 
-        # decode preprocessor
+        # Decode preprocessor if exists
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
@@ -118,7 +126,11 @@ async def create_model(request: Request):
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(df.columns) - 1
 
-        return sanitize({"status": "success", "mode": "automl", "result": result})
+        return sanitize({
+            "status": "success",
+            "mode": "automl",
+            "result": result
+        })
 
     except Exception as e:
         traceback.print_exc()
@@ -126,7 +138,7 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# CREATE LLM
+# CREATE LLM (Synthetic + Cognitive)
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
@@ -143,7 +155,10 @@ async def create_llm(request: Request):
         if isinstance(docs, str):
             docs = [x.strip() for x in docs.split("\n") if x.strip()]
 
-        result = engine.run("create_llm", {"documents": docs, "config": config})
+        result = engine.run("create_llm", {
+            "documents": docs,
+            "config": config
+        })
 
         global LLM_CACHE
         LLM_CACHE = result.get("llm_package")
@@ -156,7 +171,7 @@ async def create_llm(request: Request):
 
 
 # ============================================================
-# LLM INFERENCE
+# LLM INFERENCE (Hybrid Dataset + LLM)
 # ============================================================
 @app.post("/llm_inference")
 async def llm_inference(request: Request):
@@ -172,7 +187,10 @@ async def llm_inference(request: Request):
         if not prompt:
             raise Exception("Prompt missing")
 
-        raw = engine.run("test_llm", {"llm_package": llm_package, "prompt": prompt})
+        raw = engine.run("test_llm", {
+            "llm_package": llm_package,
+            "prompt": prompt
+        })
 
         return {"status": "success", "response": {"reply": raw}}
 
@@ -182,7 +200,7 @@ async def llm_inference(request: Request):
 
 
 # ============================================================
-# KNOWLEDGE SENTENCE GENERATION
+# DATASET → KNOWLEDGE SENTENCES
 # ============================================================
 @app.post("/dataset_to_knowledge")
 async def dataset_to_knowledge(request: Request):
@@ -204,7 +222,7 @@ async def dataset_to_knowledge(request: Request):
 
 
 # ============================================================
-# UNIFIED BRAIN PIPELINE (Required for all UI analysis modes)
+# ENTERPRISE BRAIN PIPELINE (CRE + DMAO + ALL)
 # ============================================================
 @app.post("/run")
 async def run_brain(request: Request):
@@ -218,19 +236,23 @@ async def run_brain(request: Request):
         if df.empty:
             raise Exception("Dataset empty")
 
-        queries = {
-            "analyze": "Analyze this dataset.",
-            "visualize": "Suggest visualizations.",
-            "forecast": "Predict future values.",
-            "anomaly": "Detect anomalies.",
-            "insights": "Extract insights."
+        mode_map = {
+            "analyze": "Dataset analysis",
+            "visualize": "Create visualization plan",
+            "forecast": "Forecast future values",
+            "anomaly": "Detect anomalies",
+            "insights": "Extract insights"
         }
 
-        query = queries.get(mode)
+        query = mode_map.get(mode)
         if query is None:
             raise Exception(f"Unknown analysis mode '{mode}'")
 
-        response = engine.run("brain_pipeline", {"query": query, "dataset": df})
+        # Call the new cognitive brain pipeline
+        response = engine.run("brain_pipeline", {
+            "dataset": df,
+            "query": query
+        })
 
         return {"status": "success", "response": response}
 
@@ -240,7 +262,7 @@ async def run_brain(request: Request):
 
 
 # ============================================================
-# PREDICT
+# PREDICT (AutoML Model)
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
@@ -284,4 +306,6 @@ async def predict(request: Request):
 # ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "8.1.3-JSON-STABLE-FULL"}
+    return {"status": "ok", "version": "10.0-Cognitive-Enterprise"}
+# ============================================================
+#  SIFRA LLM ENGINE v4.5 — COGNITIVE RAG    

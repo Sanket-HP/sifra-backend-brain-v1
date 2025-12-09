@@ -1,16 +1,14 @@
 # ============================================================
-#   SIFRA Dataset → Knowledge Generator v8.0 ENTERPRISE
-#   Ultra-Optimized for 1M – 10M+ Rows
+#   SIFRA Dataset → Knowledge Generator v9.0 ENTERPRISE
+#   Ultra-Optimized with Cognitive Engines (HDP + HDS + CRE + DMAO + ALL)
 #
-#   Features:
-#       ✓ Universal Input Normalizer (all formats)
-#       ✓ Smart Header Detection v8.0 (AI-Based)
-#       ✓ Chunked CSV Reader (memory safe)
-#       ✓ Semantic Column Understanding
-#       ✓ Adaptive Summary Engine (compresses large datasets)
-#       ✓ Fast Numeric Stats Engine (vectorized)
-#       ✓ Limited Row Profiling (no slowdown)
-#       ✓ Auto-scaling logic for big datasets
+#   NEW FEATURES:
+#       ✓ HDP semantic extraction for each column
+#       ✓ HDS trend + correlation + variation embedding
+#       ✓ CRE reasoning-driven insight generation
+#       ✓ DMAO multi-agent explanatory knowledge
+#       ✓ Adaptive learning feedback loop (ALL)
+#       ✓ NARE-X dataset → natural language knowledge
 # ============================================================
 
 import pandas as pd
@@ -19,25 +17,31 @@ import re
 from io import StringIO
 from typing import Union, List, Dict, Any
 
+from core.sifra_core import SifraCore
+
 
 # ============================================================
-#   UNIVERSAL NORMALIZER (accepts any dataset format)
+#   UNIVERSAL NORMALIZER
 # ============================================================
 
 def normalize_input(ds):
     """
-    Accepts ANY dataset format and returns a clean pandas DataFrame.
-    Supports: string CSV, list-of-rows, list-of-dicts, DF JSON, DataFrame.
+    Accepts ANY dataset format → returns clean pandas DataFrame.
+    Supported inputs:
+        - CSV string
+        - list-of-dicts
+        - list-of-lists
+        - DataFrame JSON {columns, data}
+        - Pandas DataFrame
     """
-
     if ds is None:
         return pd.DataFrame()
 
-    # 1) Already a dataframe
+    # Already a DF
     if isinstance(ds, pd.DataFrame):
         return ds.copy()
 
-    # 2) CSV string
+    # CSV string
     if isinstance(ds, str):
         if "\n" in ds or "," in ds:
             try:
@@ -45,48 +49,47 @@ def normalize_input(ds):
             except:
                 pass
 
-    # 3) List of dicts
+    # List of dict rows
     if isinstance(ds, list) and len(ds) > 0 and isinstance(ds[0], dict):
         return pd.DataFrame(ds)
 
-    # 4) List of lists
+    # List of lists (header + rows)
     if isinstance(ds, list) and len(ds) > 1 and isinstance(ds[0], list):
         header = ds[0]
         rows = ds[1:]
         return pd.DataFrame(rows, columns=header)
 
-    # 5) List of CSV lines (strings)
+    # List of CSV strings
     if isinstance(ds, list) and len(ds) > 1 and isinstance(ds[0], str):
         try:
             return pd.read_csv(StringIO("\n".join(ds)))
         except:
             pass
 
-    # 6) DataFrame JSON
+    # DataFrame JSON
     if isinstance(ds, dict) and "columns" in ds and "data" in ds:
         return pd.DataFrame(ds["data"], columns=ds["columns"])
 
-    # 7) Fallback empty
     return pd.DataFrame()
 
 
 # ============================================================
-#   SMART HEADER DETECTION v8.0
+#   SMART HEADER FIX v9.0
 # ============================================================
 
 def smart_header_fix(df: pd.DataFrame) -> pd.DataFrame:
 
-    # 1) If all headers numeric → treat first row as header
+    # If headers look numeric → rename
     if all(str(c).isdigit() for c in df.columns):
         df.columns = [f"col_{i+1}" for i in range(df.shape[1])]
 
-    # 2) If header looks like data → shift header down
+    # If header looks like a row → shift
     suspicious = False
     for c in df.columns:
         cs = str(c)
         if len(cs) > 25: suspicious = True
         if "/" in cs: suspicious = True
-        if cs.replace(".","",1).isdigit(): suspicious = True
+        if cs.replace(".", "", 1).isdigit(): suspicious = True
 
     if suspicious:
         old = list(df.columns)
@@ -99,14 +102,14 @@ def smart_header_fix(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-#   COLUMN SEMANTIC DETECTOR v8.0
+#   SEMANTIC COLUMN DETECTOR – HDP-powered v9.0
 # ============================================================
 
 def detect_semantic(series: pd.Series):
 
     s = series.dropna().astype(str)
 
-    # Date detection
+    # Date
     if s.str.contains(r"[/-]").mean() > 0.3:
         try:
             parsed = pd.to_datetime(s, errors="coerce")
@@ -127,7 +130,7 @@ def detect_semantic(series: pd.Series):
     if s.str.match(r"^\d{6,}$").mean() > 0.3:
         return "identifier"
 
-    # Low cardinality category
+    # Category
     if series.nunique() < 50:
         return "category"
 
@@ -135,42 +138,52 @@ def detect_semantic(series: pd.Series):
     if pd.api.types.is_numeric_dtype(series):
         return "numeric"
 
-    # Text fallback
+    # Text
     return "text"
 
 
 # ============================================================
-#   MAIN: DATASET → KNOWLEDGE SENTENCES (v8.0)
+#   MAIN: DATASET → KNOWLEDGE (with SIFRA Engines)
 # ============================================================
 
 def df_to_sentences(df: pd.DataFrame):
 
-    # 1) Smart header fix
+    sifra = SifraCore()
+
+    # Smart header fix
     df = smart_header_fix(df)
 
-    # 2) Auto limit dataset for speed (profiling only)
-    total_rows = df.shape[0]
-    total_cols = df.shape[1]
-
-    # Only sample rows for generating insight (10 sample rows)
+    # Sample for profiling
+    total_rows, total_cols = df.shape
     sample_df = df.head(10).copy()
 
     sentences = []
 
-    # -------------------------------------------------------
-    # Dataset Overview
-    # -------------------------------------------------------
-    sentences.append(
-        f"The dataset contains **{total_rows} rows** and **{total_cols} columns**."
-    )
+    # ======================================================
+    #   BASIC STRUCTURE
+    # ======================================================
+    sentences.append(f"The dataset contains **{total_rows} rows** and **{total_cols} columns**.")
+    sentences.append("It includes the following fields: " + ", ".join(df.columns) + ".")
 
-    sentences.append(
-        "The dataset includes the following fields: " + ", ".join(df.columns) + "."
-    )
+    # ======================================================
+    #   SIFRA COGNITIVE ANALYSIS (HDP + HDS + CRE + DMAO)
+    # ======================================================
+    brain = sifra.run("analyze", df)
 
-    # -------------------------------------------------------
-    # Column semantic detection
-    # -------------------------------------------------------
+    hdp = brain.get("HDP", {})
+    hds = brain.get("HDS", {})
+    cre = brain.get("CRE", {})
+    dmao = brain.get("DMAO", {})
+    nlg = brain.get("NAREX", {})
+
+    # Natural language dataset summary
+    if "natural_language_response" in nlg:
+        sentences.append("### Cognitive Summary")
+        sentences.append(nlg["natural_language_response"])
+
+    # ======================================================
+    #   COLUMN-LEVEL KNOWLEDGE
+    # ======================================================
     for col in df.columns:
         series = df[col]
         missing = series.isna().sum()
@@ -178,12 +191,18 @@ def df_to_sentences(df: pd.DataFrame):
         meaning = detect_semantic(series)
 
         sentences.append(
-            f"Column '{col}' is detected as **{meaning}** (dtype: {dtype}) with {missing} missing values."
+            f"Column **'{col}'** appears to be **{meaning}** (dtype: *{dtype}*) with **{missing} missing values**."
         )
 
-    # -------------------------------------------------------
-    # Numeric Stats (fast, vectorized)
-    # -------------------------------------------------------
+        # HDP meaning vector influence
+        if hdp:
+            sentences.append(
+                f"Semantic interpretation suggests intent '{hdp.get('intent_vector', 'unknown')}'."
+            )
+
+    # ======================================================
+    #   NUMERIC STATS
+    # ======================================================
     num_cols = df.select_dtypes(include=[np.number]).columns
     for col in num_cols:
         s = df[col].dropna()
@@ -192,22 +211,13 @@ def df_to_sentences(df: pd.DataFrame):
             continue
 
         sentences.append(
-            f"Numeric column '{col}' — min: {round(s.min(),3)}, max: {round(s.max(),3)}, "
+            f"Numeric field '{col}' — min: {round(s.min(),3)}, max: {round(s.max(),3)}, "
             f"mean: {round(s.mean(),3)}, std: {round(s.std(),3)}, skew: {round(s.skew(),3)}."
         )
 
-    # -------------------------------------------------------
-    # Categorical summaries
-    # -------------------------------------------------------
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns
-    for col in cat_cols:
-        vc = df[col].fillna("MISSING").value_counts().head(5)
-        freq = ", ".join([f"{k} ({v})" for k, v in vc.items()])
-        sentences.append(f"Common values in '{col}': {freq}.")
-
-    # -------------------------------------------------------
-    # Correlation engine (safe for 1M rows)
-    # -------------------------------------------------------
+    # ======================================================
+    #   CORRELATION INSIGHTS
+    # ======================================================
     if len(num_cols) >= 2:
         corr = df[num_cols].corr(numeric_only=True)
         for col in corr.columns:
@@ -216,25 +226,35 @@ def df_to_sentences(df: pd.DataFrame):
                 continue
             strongest = others.abs().idxmax()
             strength = round(others.abs().max(), 3)
-            if strength >= 0.4:
+            if strength >= 0.35:
                 sentences.append(
-                    f"Column '{col}' is correlated with '{strongest}' (strength {strength})."
+                    f"Field '{col}' correlates strongly with '{strongest}' (correlation strength **{strength}**)."
                 )
 
-    # -------------------------------------------------------
-    # Row-level summaries (first 10 rows)
-    # -------------------------------------------------------
+    # ======================================================
+    #   ROW SUMMARIES
+    # ======================================================
     for idx, row in sample_df.iterrows():
-        parts = []
-        for col, val in row.items():
-            parts.append(f"{col}: {val}")
-        sentences.append(f"Record {idx+1}: " + ", ".join(parts) + ".")
+        details = ", ".join([f"{c}: {v}" for c, v in row.items()])
+        sentences.append(f"Record {idx+1}: {details}.")
 
-    # -------------------------------------------------------
-    # Sentence limiter for extremely large datasets
-    # -------------------------------------------------------
-    if len(sentences) > 500:
-        sentences = sentences[:500]
-        sentences.append("Additional insights compressed for performance.")
+    # ======================================================
+    #   DMAO AGENT OUTPUT (Knowledge Agent)
+    # ======================================================
+    if dmao.get("agent_output"):
+        sentences.append("### Multi-Agent Knowledge")
+        sentences.append(dmao["agent_output"].get("natural_language_response", ""))
+
+    # ======================================================
+    #   CRE DECISION SUMMARY (WHY these insights matter)
+    # ======================================================
+    if cre:
+        sentences.append("### Cognitive Reasoning Engine Explanation")
+        sentences.append(cre.get("final_decision", ""))
+
+    # Limit sentences
+    if len(sentences) > 600:
+        sentences = sentences[:600]
+        sentences.append("Additional insights compressed for performance optimization.")
 
     return sentences
