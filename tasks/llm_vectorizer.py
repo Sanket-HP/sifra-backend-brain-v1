@@ -3,12 +3,12 @@
 #
 #   NEW IN v4.5:
 #     ✔ CRE-aware semantic boosting
-#     ✔ Improved TF-IDF (7k max_features)
-#     ✔ BM25++ hybrid scoring (smoother weighting)
-#     ✔ Context window scoring for reasoning models
-#     ✔ Token-length normalization (LLM-friendly)
-#     ✔ Faster fallback search
-#     ✔ 100% JSON-stable + NO circular imports
+#     ✔ Improved TF-IDF (7k max_features → upgraded to 9k)
+#     ✔ BM25++ hybrid scoring
+#     ✔ Context window scoring (LLM reasoning prep)
+#     ✔ Token-length normalization
+#     ✔ Fallback search (zero failure)
+#     ✔ FIXED REGEX CRASH (NO more :-/ errors)
 # ============================================================
 
 import numpy as np
@@ -17,26 +17,29 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 # ============================================================
-# CLEAN TEXT (CRE-friendly)
+# CLEAN TEXT (CRE-friendly + FIXED REGEX)
 # ============================================================
 def clean_text(text: str) -> str:
     """
-    Cleans text while keeping punctuation useful for semantic
-    reasoning (important for CRE → meaning extraction).
+    Cleans text while keeping punctuation necessary for semantic reasoning.
+    FIXED: Removed invalid regex range error (:-/).
     """
+
     text = str(text).lower()
-    text = re.sub(r"[^a-z0-9\s,.:-/%]", " ", text)
+
+    # FIXED: escape dash and allow reasoning punctuation safely
+    text = re.sub(r"[^a-z0-9\s,\.\:\/%\-\_]", " ", text)
+
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 # ============================================================
-# BUILD VECTOR STORE (CRE-aware)
+# BUILD VECTOR STORE
 # ============================================================
 def build_vector_store(documents: list):
     """
-    Builds a TF-IDF + BM25++ ready vector store.
-    CRE-aware: retains sentence-level context signals.
+    Builds TF-IDF + BM25++ vector store with CRE-aware signals.
     """
 
     cleaned_docs = [clean_text(doc) for doc in documents if str(doc).strip()]
@@ -52,7 +55,7 @@ def build_vector_store(documents: list):
 
     try:
         vectorizer = TfidfVectorizer(
-            max_features=9000,          # bumped for better semantic recall
+            max_features=9000,       # Extended vocabulary
             stop_words="english",
             ngram_range=(1, 2),
             sublinear_tf=True,
@@ -62,7 +65,7 @@ def build_vector_store(documents: list):
         dense_vectors = matrix.toarray().tolist()
 
     except Exception:
-        # SAFETY MODE (no crash)
+        # FAILSAFE: no crash even if TF-IDF backend fails
         dense_vectors = np.random.rand(len(cleaned_docs), 32).tolist()
         vectorizer = None
         matrix = None
@@ -79,12 +82,9 @@ def build_vector_store(documents: list):
 
 
 # ============================================================
-# BM25++ BOOSTER  (improved weighting for long text)
+# BM25++ (Improved Long Text Weighting)
 # ============================================================
 def _bm25pp(tfidf_scores, doc_lengths, avg_dl, k=1.5, b=0.75):
-    """
-    Enhanced BM25++ scoring for larger document chunks.
-    """
     adjusted = []
     for score, dl in zip(tfidf_scores, doc_lengths):
         denom = score + k * (1 - b + b * (dl / (avg_dl + 1e-7)))
@@ -94,28 +94,21 @@ def _bm25pp(tfidf_scores, doc_lengths, avg_dl, k=1.5, b=0.75):
 
 
 # ============================================================
-# CRE SIGNAL BOOSTING (NEW)
+# CRE SEMANTIC BOOSTER (Keyword + Reasoning Depth)
 # ============================================================
 def _cre_boost(scores, docs, query):
-    """
-    CRE boosts scores based on semantic alignment:
-     • matching keywords
-     • reasoning depth (colon, periods, commas)
-     • contextual cues from the query
-    """
-
     query_words = set(clean_text(query).split())
     boosted = []
 
     for s, d in zip(scores, docs):
         base = s
 
-        # boost for keyword overlap
+        # Keyword overlap boost
         d_words = set(d.split())
         overlap = len(query_words.intersection(d_words))
-        base += overlap * 0.03  # small but impactful
+        base += overlap * 0.03
 
-        # punctuation complexity → reasoning depth
+        # Reasoning punctuation = deeper meaning indicators
         complexity = d.count(",") + d.count(":") + d.count(".")
         base += complexity * 0.005
 
@@ -125,7 +118,7 @@ def _cre_boost(scores, docs, query):
 
 
 # ============================================================
-# SEARCH (CRE + BM25++ + TF-IDF hybrid)
+# SEARCH ENGINE (TF-IDF + BM25++ + CRE Hybrid)
 # ============================================================
 def search_vector_store(vector_store: dict, query: str, top_k=3):
 
@@ -142,35 +135,36 @@ def search_vector_store(vector_store: dict, query: str, top_k=3):
         matrix = vector_store.get("matrix")
         doc_lengths = vector_store.get("doc_len")
 
+        # ===============================
+        # TF-IDF + BM25++ + CRE (Full Mode)
+        # ===============================
         if vectorizer is not None and matrix is not None:
 
             query_vec = vectorizer.transform([query])
             tfidf_scores = (matrix @ query_vec.T).toarray().flatten()
 
-            # All zero? → fallback based on length
+            # All zero scores → fallback to longest documents
             if tfidf_scores.max() <= 0:
                 longest_ids = np.argsort(doc_lengths)[::-1][:top_k]
                 return [docs[i] for i in longest_ids]
 
             avg_dl = doc_lengths.mean()
 
-            # Step 1: BM25++
+            # BM25++ scoring
             bm25_scores = _bm25pp(tfidf_scores, doc_lengths, avg_dl)
 
-            # Step 2: Combine TF-IDF + BM25++
+            # Hybrid TF-IDF + BM25++
             hybrid_scores = (tfidf_scores * 0.55) + (bm25_scores * 0.45)
 
-            # Step 3: CRE Boost (NEW)
+            # CRE semantic booster
             cre_scores = _cre_boost(hybrid_scores, docs, query)
 
-            # Step 4: Sort by cognitive relevance
             top_ids = np.argsort(cre_scores)[::-1][:top_k]
-
             return [docs[i] for i in top_ids]
 
-        # -------------------------------
-        # HARD FALLBACK (No TF-IDF available)
-        # -------------------------------
+        # ===============================
+        # HARD FALLBACK MODE (No TF-IDF)
+        # ===============================
         q_words = clean_text(query).split()
         scores = [(sum(1 for w in q_words if w in d), i) for i, d in enumerate(docs)]
         scores = sorted(scores, reverse=True)
