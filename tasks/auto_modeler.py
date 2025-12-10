@@ -1,17 +1,13 @@
 # ============================================================
-#   SIFRA AI - Cognitive AutoML v9.0.0-ULTRA (ENTERPRISE EDITION)
-#   Integrated With:
-#       • CRE (Cognitive Reasoning Engine)
-#       • DMAO Modeling Agent
-#       • ALL Adaptive Learning Loop
-#       • HDP/HDS Semantic + Statistical Profiling
-#       • Natural Language Model Summary (NARE-X)
+#   SIFRA AI - Cognitive AutoML v10.0-PRO (FINAL ENTERPRISE)
+#   Stable Version for SIFRA Unified Engine v10 + Frontend V10
 # ============================================================
 
 import numpy as np
 import pandas as pd
 import pickle
 import time
+import traceback
 
 from core.sifra_core import SifraCore
 from data.preprocessor import Preprocessor
@@ -28,28 +24,27 @@ from sklearn.ensemble import (
     RandomForestRegressor, RandomForestClassifier,
     GradientBoostingRegressor, GradientBoostingClassifier
 )
+
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
 
-# ------------------------------------------------------------
 def dprint(*msg):
     print("[AutoML DEBUG]", *msg)
 
 
-# ------------------------------------------------------------
 class AutoModeler:
 
     def __init__(self):
-        print("[AutoML v9.0.0-ULTRA] Cognitive AutoML Ready")
+        print("[AutoML v10.0-PRO] Cognitive AutoML Ready")
 
         self.preprocessor = None
         self.core = SifraCore()
         self.pp = Preprocessor()
 
 
-    # ============================================================
-    #  CLEAN INPUT
-    # ============================================================
+    # ------------------------------------------------------------
+    # CLEAN INPUT
+    # ------------------------------------------------------------
     def clean_quotes(self, df):
         for col in df.columns:
             if df[col].dtype == object:
@@ -57,9 +52,9 @@ class AutoModeler:
         return df
 
 
-    # ============================================================
-    #  DATA TYPE INFERENCE
-    # ============================================================
+    # ------------------------------------------------------------
+    # DATA TYPE INFERENCE
+    # ------------------------------------------------------------
     def fast_is_datetime(self, series):
         try:
             pd.to_datetime(series.head(200), errors="raise")
@@ -79,13 +74,12 @@ class AutoModeler:
                 types[col] = "highcat"
             else:
                 types[col] = "categorical"
-        dprint("Detected column types:", types)
         return types
 
 
-    # ============================================================
-    #  DATETIME EXPANSION
-    # ============================================================
+    # ------------------------------------------------------------
+    # DATETIME EXPANSION
+    # ------------------------------------------------------------
     def expand_datetime(self, df, cols):
         df = df.copy()
         for col in cols:
@@ -97,9 +91,9 @@ class AutoModeler:
         return df.drop(columns=cols)
 
 
-    # ============================================================
-    #  PREPROCESSOR BUILDER
-    # ============================================================
+    # ------------------------------------------------------------
+    # PREPROCESSOR BUILDER
+    # ------------------------------------------------------------
     def build_preprocessing(self, X):
 
         X.columns = X.columns.astype(str)
@@ -113,6 +107,7 @@ class AutoModeler:
         if dts:
             X = self.expand_datetime(X, dts)
 
+        # Categorical & numeric pipelines
         transformers = []
 
         if nums:
@@ -137,34 +132,42 @@ class AutoModeler:
         return X
 
 
-    # ============================================================
-    #  SAFE METRICS
-    # ============================================================
+    # ------------------------------------------------------------
+    # METRICS SAFE WRAPPERS
+    # ------------------------------------------------------------
     def safe_rmse(self, y, preds):
         try:
             return float(mean_squared_error(y, preds, squared=False))
         except:
             return float(np.sqrt(np.mean((np.array(y)-np.array(preds))**2)))
 
+    def safe_r2(self, y, preds):
+        try:
+            s = r2_score(y, preds)
+            if np.isnan(s):
+                return -999
+            return float(s)
+        except:
+            return -999
 
-    # ============================================================
-    #  MODEL TEST WRAPPER
-    # ============================================================
+
+    # ------------------------------------------------------------
+    # MODEL TEST WRAPPER
+    # ------------------------------------------------------------
     def try_model(self, mdl, Xtr, ytr, Xte, yte, metric):
         try:
             mdl.fit(Xtr, ytr)
             pred = mdl.predict(Xte)
             score = float(metric(yte, pred))
-            dprint("Model tested:", mdl.__class__.__name__, "| Score:", score)
             return score, mdl
         except Exception as e:
-            dprint("Model failed:", mdl.__class__.__name__, "| Error:", str(e))
+            dprint("Model failed:", mdl.__class__.__name__, str(e))
             return None, None
 
 
-    # ============================================================
-    #  COGNITIVE ML TASK DETECTION
-    # ============================================================
+    # ------------------------------------------------------------
+    # DETECT ML TASK
+    # ------------------------------------------------------------
     def detect_task(self, y):
         unique = len(np.unique(y))
         if unique <= 1:
@@ -176,117 +179,101 @@ class AutoModeler:
         return "regression"
 
 
-    # ============================================================
-    #                 MAIN COGNITIVE AutoML ENGINE
-    # ============================================================
+    # ------------------------------------------------------------
+    # MAIN ENGINE
+    # ------------------------------------------------------------
     def run(self, df_input):
 
-        start = time.time()
-
-        df = self.clean_quotes(df_input.copy())
-
-        if df.shape[1] < 2:
-            return self.wrap_error("Dataset must contain at least 2 columns.")
-
-        target = df.columns[-1]
-        y = df[target]
-        X = df.drop(columns=[target]).copy()
-
-        # -----------------------------------------------------------
-        # Step 1 — Cognitive dataset understanding (HDP + HDS + CRE)
-        # -----------------------------------------------------------
-        cognitive_summary = self.core.run("analyze", df)
-
-        # Pull out SIFRA intelligence
-        hdp = cognitive_summary.get("HDP", {})
-        hds = cognitive_summary.get("HDS", {})
-        cre = cognitive_summary.get("CRE", {})
-        dmao = cognitive_summary.get("DMAO", {})
-        learning = cognitive_summary.get("ALL", {})
-
-        # -----------------------------------------------------------
-        # Step 2 — Preprocessing
-        # -----------------------------------------------------------
         try:
+            start = time.time()
+            df = self.clean_quotes(df_input.copy())
+
+            if df.shape[1] < 2:
+                return self.wrap_error("Dataset must contain at least 2 columns.")
+
+            target = df.columns[-1]
+            y = df[target]
+            X = df.drop(columns=[target]).copy()
+
+            # Cognitive Summary (never allowed to break AutoML)
+            try:
+                cognitive = self.core.run("analyze", df)
+            except:
+                cognitive = {}
+
+            hdp = cognitive.get("HDP", {})
+            hds = cognitive.get("HDS", {})
+            cre = cognitive.get("CRE", {})
+            dmao = cognitive.get("DMAO", {})
+            learning = cognitive.get("ALL", {})
+
+            # -------------------------------------------
+            # PREPROCESSING
+            # -------------------------------------------
             X = self.build_preprocessing(X)
             Xarr = self.preprocessor.fit_transform(X)
-        except Exception as e:
-            return self.wrap_error("Preprocessing failed: " + str(e))
 
-        task = self.detect_task(y)
+            task = self.detect_task(y)
+            Xtr, Xte, ytr, yte = train_test_split(Xarr, y, test_size=0.2)
 
-        Xtr, Xte, ytr, yte = train_test_split(Xarr, y, test_size=0.2)
+            # -------------------------------------------
+            # MODEL CANDIDATES
+            # -------------------------------------------
+            reg_models = {
+                "LinearRegression": LinearRegression(),
+                "RandomForestRegressor": RandomForestRegressor(n_estimators=120),
+                "GradientBoostingRegressor": GradientBoostingRegressor(),
+            }
 
-        # ===========================================================
-        #                    MODEL SELECTION LOGIC (COGNITIVE)
-        # ===========================================================
+            clf_models = {
+                "LogisticRegression": LogisticRegression(max_iter=500),
+                "RandomForestClassifier": RandomForestClassifier(n_estimators=140),
+                "GradientBoostingClassifier": GradientBoostingClassifier(),
+            }
 
-        regression_models = {
-            "LinearRegression": LinearRegression(),
-            "RandomForestRegressor": RandomForestRegressor(n_estimators=120),
-            "GradientBoostingRegressor": GradientBoostingRegressor(),
-        }
-
-        classification_models = {
-            "LogisticRegression": LogisticRegression(max_iter=500),
-            "RandomForestClassifier": RandomForestClassifier(n_estimators=140),
-            "GradientBoostingClassifier": GradientBoostingClassifier(),
-        }
-
-        if task == "regression":
+            # -------------------------------------------
+            # TRAINING LOOP
+            # -------------------------------------------
             best_score = -999
             best_model = None
             best_name = None
 
-            for name, mdl in regression_models.items():
-                score, fitted = self.try_model(mdl, Xtr, ytr, Xte, yte, r2_score)
-                if score is not None and score > best_score:
-                    best_score = score
-                    best_model = fitted
-                    best_name = name
+            if task == "regression":
+                for name, mdl in reg_models.items():
+                    score, fitted = self.try_model(mdl, Xtr, ytr, Xte, yte, self.safe_r2)
+                    if score is not None and score > best_score:
+                        best_score = score
+                        best_model = fitted
+                        best_name = name
 
-            preds = best_model.predict(Xte)
-            end = time.time()
+                preds = best_model.predict(Xte)
 
-            return self.wrap_success(
-                task="regression",
-                best_model=best_name,
-                best_score=best_score,
-                accuracy={
+                accuracy = {
                     "rmse": self.safe_rmse(yte, preds),
                     "mae": float(mean_absolute_error(yte, preds)),
-                },
-                summary=f"{best_name} (R2={best_score:.4f})",
-                model=best_model,
-                preproc=self.preprocessor,
-                runtime=end - start,
-                hdp=hdp,
-                hds=hds,
-                cre=cre,
-                dmao=dmao,
-                learning=learning,
-            )
+                }
 
-        if task == "classification":
-            best_score = -1
-            best_model = None
-            best_name = None
+                summary = f"{best_name} (R2={best_score:.4f})"
 
-            for name, mdl in classification_models.items():
-                score, fitted = self.try_model(mdl, Xtr, ytr, Xte, yte, accuracy_score)
-                if score is not None and score > best_score:
-                    best_score = score
-                    best_model = fitted
-                    best_name = name
+            else:
+                for name, mdl in clf_models.items():
+                    score, fitted = self.try_model(mdl, Xtr, ytr, Xte, yte, accuracy_score)
+                    if score is not None and score > best_score:
+                        best_score = score
+                        best_model = fitted
+                        best_name = name
+
+                accuracy = best_score
+                summary = f"{best_name} (ACC={best_score:.4f})"
 
             end = time.time()
 
             return self.wrap_success(
-                task="classification",
+                task=task,
                 best_model=best_name,
                 best_score=best_score,
-                accuracy=best_score,
-                summary=f"{best_name} (ACC={best_score:.4f})",
+                accuracy=accuracy,
+                summary=summary,
                 model=best_model,
                 preproc=self.preprocessor,
                 runtime=end - start,
@@ -294,13 +281,17 @@ class AutoModeler:
                 hds=hds,
                 cre=cre,
                 dmao=dmao,
-                learning=learning,
+                learning=learning
             )
 
+        except Exception as e:
+            traceback.print_exc()
+            return self.wrap_error(str(e))
 
-    # ============================================================
-    #  SUCCESS WRAPPER (Cognitive Response)
-    # ============================================================
+
+    # ------------------------------------------------------------
+    # SUCCESS WRAPPER
+    # ------------------------------------------------------------
     def wrap_success(self, task, best_model, best_score, accuracy,
                      summary, model, preproc, runtime,
                      hdp, hds, cre, dmao, learning):
@@ -312,7 +303,7 @@ class AutoModeler:
                 feature_names = list(preproc.get_feature_names_out())
             except:
                 feature_names = []
-        except Exception as e:
+        except:
             model_hex = None
             preproc_hex = None
             feature_names = []
@@ -321,14 +312,12 @@ class AutoModeler:
         if not natural:
             natural = (
                 f"SIFRA selected **{best_model}** based on dataset semantics, "
-                f"trend {hds.get('trend_score')}, and cognitive reasoning. "
-                "Model achieved strong performance according to AutoML evaluation."
+                f"trend={hds.get('trend_score')}, CRE reasoning, and Adaptive Learning."
             )
 
         return {
             "status": "success",
             "mode": "model",
-
             "result": {
                 "task": task,
                 "best_model": best_model,
@@ -341,25 +330,21 @@ class AutoModeler:
 
                 "feature_names": feature_names,
                 "feature_count": len(feature_names),
-
                 "runtime": runtime,
 
-                # Cognitive Additions
                 "HDP": hdp,
                 "HDS": hds,
-                "CRE_reasoning": cre.get("final_decision"),
-                "CRE_steps": cre.get("steps", []),
-                "agent_used": dmao.get("agent_selected", "Modeler-Agent"),
-                "dmao_output": dmao.get("agent_output"),
-                "learning_update": learning,
-
+                "CRE": cre,
+                "DMAO": dmao,
+                "learning": learning,
                 "natural_language_summary": natural,
             }
         }
 
-    # ============================================================
-    #  ERROR WRAPPER
-    # ============================================================
+
+    # ------------------------------------------------------------
+    # ERROR WRAPPER
+    # ------------------------------------------------------------
     def wrap_error(self, msg):
         return {
             "status": "error",
