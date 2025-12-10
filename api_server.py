@@ -10,6 +10,7 @@ import pandas as pd
 import pickle
 import math
 from io import StringIO
+from typing import Any
 
 from core.sifra_unified import SIFRAUnifiedEngine
 from core.sifra_llm_engine import SifraLLMEngine
@@ -45,16 +46,14 @@ LLM_CACHE = None
 
 
 # ------------------------------------------------------------
-# NORMALIZE DATASET (Strongest Version)
+# NORMALIZE DATASET
 # ------------------------------------------------------------
 def normalize_dataset(ds):
     try:
-        # JSON structured dataset
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
             cols = ds["columns"]
             fixed = []
             for row in ds["data"]:
-                # trim / pad rows safely
                 if len(row) < len(cols):
                     row = row + [None] * (len(cols) - len(row))
                 elif len(row) > len(cols):
@@ -62,11 +61,9 @@ def normalize_dataset(ds):
                 fixed.append(row)
             return pd.DataFrame(fixed, columns=cols)
 
-        # CSV string
         if isinstance(ds, str) and "," in ds and "\n" in ds:
             return pd.read_csv(StringIO(ds))
 
-        # List of lists
         if isinstance(ds, list) and len(ds) and isinstance(ds[0], list):
             longest = max(len(r) for r in ds)
             cols = [f"col_{i+1}" for i in range(longest)]
@@ -87,20 +84,34 @@ def normalize_dataset(ds):
 
 
 # ------------------------------------------------------------
-# SANITIZER
+# JSON SAFE SANITIZER (Fixes /create_llm crash)
 # ------------------------------------------------------------
-def sanitize(v):
-    if isinstance(v, float):
-        return 0 if (math.isnan(v) or math.isinf(v)) else v
-    if isinstance(v, dict):
-        return {k: sanitize(x) for k, x in v.items()}
-    if isinstance(v, list):
-        return [sanitize(x) for x in v]
-    return v
+def json_safe(obj: Any):
+    """Makes ANY Python object JSON-serializable."""
+    try:
+        if obj is None:
+            return None
+        if isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, float):
+            return 0 if (math.isnan(obj) or math.isinf(obj)) else obj
+        if isinstance(obj, dict):
+            return {str(k): json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [json_safe(x) for x in obj]
+        if isinstance(obj, tuple):
+            return [json_safe(x) for x in obj]
+        if isinstance(obj, pd.DataFrame):
+            return obj.to_dict(orient="records")
+        if hasattr(obj, "tolist"):
+            return obj.tolist()
+        return str(obj)
+    except:
+        return str(obj)
 
 
 # ============================================================
-# CREATE MODEL (AutoML)
+# CREATE MODEL
 # ============================================================
 @app.post("/create_model")
 async def create_model(request: Request):
@@ -114,7 +125,6 @@ async def create_model(request: Request):
         automl = engine.run("automl_train", {"dataset": df})
         result = automl.get("result", automl)
 
-        # Decode preprocessor metadata
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
@@ -132,7 +142,7 @@ async def create_model(request: Request):
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(result["feature_names"])
 
-        return sanitize({
+        return json_safe({
             "status": "success",
             "mode": "automl",
             "result": result
@@ -144,7 +154,7 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# CREATE LLM (Synthetic + Human Mode)
+# CREATE LLM (Human + RAG Mode)
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
@@ -168,7 +178,11 @@ async def create_llm(request: Request):
         global LLM_CACHE
         LLM_CACHE = result.get("llm_package")
 
-        return {"status": "success", "mode": "synthetic_llm", "result": result}
+        return json_safe({
+            "status": "success",
+            "mode": "synthetic_llm",
+            "result": result
+        })
 
     except Exception as e:
         traceback.print_exc()
@@ -176,7 +190,7 @@ async def create_llm(request: Request):
 
 
 # ============================================================
-# LLM INFERENCE (Human LLM + RAG)
+# LLM INFERENCE (Human Conversational AI)
 # ============================================================
 @app.post("/llm_inference")
 async def llm_inference(request: Request):
@@ -196,7 +210,10 @@ async def llm_inference(request: Request):
             "prompt": prompt
         })
 
-        return {"status": "success", "response": response}
+        return json_safe({
+            "status": "success",
+            "response": response
+        })
 
     except Exception as e:
         traceback.print_exc()
@@ -204,7 +221,7 @@ async def llm_inference(request: Request):
 
 
 # ============================================================
-# DATASET → KNOWLEDGE SENTENCES
+# DATASET → KNOWLEDGE
 # ============================================================
 @app.post("/dataset_to_knowledge")
 async def dataset_to_knowledge(request: Request):
@@ -215,7 +232,10 @@ async def dataset_to_knowledge(request: Request):
         if df.empty:
             return {"status": "success", "sentences": []}
 
-        return {"status": "success", "sentences": df_to_sentences(df)}
+        return json_safe({
+            "status": "success",
+            "sentences": df_to_sentences(df)
+        })
 
     except Exception as e:
         traceback.print_exc()
@@ -223,7 +243,7 @@ async def dataset_to_knowledge(request: Request):
 
 
 # ============================================================
-# BRAIN PIPELINE (Final FE-Compatible Output)
+# BRAIN PIPELINE
 # ============================================================
 @app.post("/run")
 async def run_brain(request: Request):
@@ -247,11 +267,12 @@ async def run_brain(request: Request):
         if not query:
             raise Exception(f"Unknown mode '{mode}'")
 
-        # FULL FE-compatible object returned directly
-        return engine.run("brain_pipeline", {
+        result = engine.run("brain_pipeline", {
             "dataset": df,
             "query": query
         })
+
+        return json_safe(result)
 
     except Exception as e:
         traceback.print_exc()
@@ -259,7 +280,7 @@ async def run_brain(request: Request):
 
 
 # ============================================================
-# PREDICT (AutoML Model Inference)
+# PREDICT
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
@@ -280,7 +301,10 @@ async def predict(request: Request):
         X = pre.transform(sample_df)
         pred = model.predict(X).tolist()
 
-        return {"status": "success", "prediction": pred}
+        return json_safe({
+            "status": "success",
+            "prediction": pred
+        })
 
     except Exception as e:
         traceback.print_exc()

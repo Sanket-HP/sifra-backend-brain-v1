@@ -1,14 +1,15 @@
 # ============================================================
-#   SIFRA Synthetic LLM Engine v5.0  
+#   SIFRA Synthetic LLM Engine v5.1  
 #   (HUMAN-LIKE ANSWERING + COGNITIVE RAG + DATA MODE)
 #
-#   New Features in v5.0:
-#     ✔ Human-style answer generator (NARE-X Mini Engine)
-#     ✔ CRE-enhanced contextual reasoning
-#     ✔ Cognitive RAG (vector search + reasoning fusion)
-#     ✔ Data-aware intelligence (summaries, insights)
-#     ✔ Dynamic tone + persona system
-#     ✔ Natural paragraph generation
+#   Improvements in v5.1:
+#     ✔ Human-style NARE-X+ generator (more natural replies)
+#     ✔ Vector store built ONCE (no duplicate building)
+#     ✔ Stable output for FastAPI JSON encoding
+#     ✔ Persona-aware answer shaping
+#     ✔ Tone blending (friendly, expert, professional)
+#     ✔ Cleaner summaries in data-aware mode
+#     ✔ Better fallback answers
 # ============================================================
 
 import json
@@ -22,53 +23,59 @@ from tasks.llm_vectorizer import build_vector_store, search_vector_store
 
 
 # ============================================================
-#   MINI NARE-X NATURAL LANGUAGE GENERATION ENGINE
+#  HUMAN-LIKE NARE-X MINI ENGINE
 # ============================================================
 def generate_human_answer(prompt, context_chunks, persona="assistant", tone="helpful"):
     """
-    Produces a human-like natural language answer using
-    retrieved context + conversational tone.
+    Generates a natural, human-like answer using the NARE-X pattern:
+    Intro → Understanding → Useful context → Closing guidance
     """
 
-    intro_map = {
-        "assistant": "Sure, here's a clear explanation:",
-        "expert": "Based on the available information, here's an expert interpretation:",
-        "friendly": "Absolutely! Let me explain this in a simple way:",
-        "professional": "Here is the requested information:",
+    intro_templates = {
+        "assistant": "Sure! Let me explain this clearly:",
+        "expert": "Here's an expert breakdown based on the information available:",
+        "friendly": "Absolutely! Here's an easy-to-understand explanation:",
+        "professional": "Here is the clarified explanation you requested:",
     }
 
-    intro = intro_map.get(persona, intro_map["assistant"])
+    intro = intro_templates.get(persona, intro_templates["assistant"])
 
-    body = ""
-    for chunk in context_chunks:
-        body += f"- {chunk.strip()}\n"
+    # Build context summary
+    context_text = "\n".join(f"- {c.strip()}" for c in context_chunks)
 
-    result = (
+    # Tone-based closings
+    closing_map = {
+        "helpful": "If you'd like a deeper breakdown, feel free to ask!",
+        "friendly": "Happy to help! Let me know if you want more details 😊",
+        "expert": "If you want a more technical analysis, I can provide one.",
+        "professional": "Let me know if you require further clarification.",
+    }
+
+    closing = closing_map.get(tone, closing_map["helpful"])
+
+    return (
         f"{intro}\n\n"
         f"**Your Question:** {prompt}\n\n"
-        f"**Answer:**\n"
-        f"{body}\n"
-        f"If you'd like deeper insights, patterns, or examples — feel free to ask!"
+        f"**Answer:**\n{context_text}\n\n"
+        f"{closing}"
     )
-
-    return result
 
 
 # ============================================================
-#   MAIN LLM ENGINE
+#  SIFRA HUMAN-LIKE LLM ENGINE
 # ============================================================
 class SifraLLMEngine:
 
     def __init__(self):
-        print("[SIFRA LLM Engine] Ready (v5.0 Human-Like Mode)")
+        print("[SIFRA LLM Engine] Ready (v5.1 Human-Like Cognitive Mode)")
         self.active_llm = None
         self.active_df = None
         self.last_cre_context = None
 
 
-    # ============================================================
-    #   INTERNAL SAFE DICT HANDLER
-    # ============================================================
+    # ------------------------------------------------------------
+    # Safe dict wrapper
+    # ------------------------------------------------------------
     def _safe_dict(self, val, key, default):
         if isinstance(val, dict):
             return val
@@ -78,7 +85,7 @@ class SifraLLMEngine:
 
 
     # ============================================================
-    #   CREATE SYNTHETIC LLM INSTANCE
+    #  CREATE SYNTHETIC LLM INSTANCE
     # ============================================================
     def create_llm(self, config: dict, documents: list, df=None, cre_context=None):
 
@@ -93,7 +100,9 @@ class SifraLLMEngine:
 
         cleaned_docs = [str(d).strip() for d in documents if len(str(d).strip()) > 2]
 
-        store = build_vector_store(cleaned_docs)
+        # Build vector store ONCE (faster inference)
+        vector_store = build_vector_store(cleaned_docs)
+
         llm_id = str(uuid.uuid4())
 
         llm_package = {
@@ -102,7 +111,7 @@ class SifraLLMEngine:
             "tone": config.get("tone", "helpful"),
             "behavior": self._safe_dict(config.get("behavior"), "tone", "professional"),
             "documents": cleaned_docs,
-            "vector_store": store,
+            "vector_store": vector_store,  # stored here (no rebuild later)
             "cre_context": cre_context or {},
         }
 
@@ -117,7 +126,7 @@ class SifraLLMEngine:
 
 
     # ============================================================
-    #   MAIN INFERENCE GATEWAY
+    #  MAIN INFERENCE PIPELINE
     # ============================================================
     def inference(self, llm_package, prompt: str):
 
@@ -127,73 +136,79 @@ class SifraLLMEngine:
         if not isinstance(llm_package, dict):
             return {"status": "error", "reply": "Invalid LLM package."}
 
-        # Step 1 — DATA-AWARE MODE
+        # Step 1 — Data-aware summary if dataset exists
         if isinstance(self.active_df, pd.DataFrame):
-            data_reply = self._data_summary_mode(prompt, self.active_df)
-            if data_reply:
-                return {"status": "success", "reply": data_reply}
+            reply = self._data_summary_mode(prompt, self.active_df)
+            if reply:
+                return {"status": "success", "reply": reply}
 
-        # Step 2 — Cognitive RAG + Human-Like Answer
+        # Step 2 — Cognitive RAG (vector retrieval + human NLG)
         return self._cognitive_vector_mode(llm_package, prompt)
 
 
     # ============================================================
-    #   DATA-AWARE REASONING MODE
+    #  DATA SUMMARY MODE (Dataset-aware LLM)
     # ============================================================
     def _data_summary_mode(self, prompt, df):
 
         p = prompt.lower().strip()
 
         keywords = [
-            "summarize", "dataset overview", "columns", "stats", "trends",
-            "describe dataset", "explain dataset"
+            "summarize", "dataset", "columns", "stats", "trends",
+            "overview", "structure", "explain dataset"
         ]
 
         if not any(k in p for k in keywords):
             return None
 
         rows, cols = df.shape
+        top_cols = ", ".join(str(c) for c in df.columns[:5])
 
         msg = (
-            f"Here’s a quick overview of your dataset:\n\n"
+            f"Here’s a quick summary of your dataset:\n\n"
             f"- **Rows:** {rows}\n"
-            f"- **Columns:** {cols}\n\n"
-            f"Top fields include: {', '.join(df.columns[:5])}\n\n"
-            "This dataset is suitable for forecasting, insights, and ML modelling."
+            f"- **Columns:** {cols}\n"
+            f"- **Key Columns:** {top_cols}\n\n"
+            f"This dataset can be used for forecasting, insights, ML modelling, anomaly detection, and more."
         )
 
         return msg
 
 
     # ============================================================
-    #   COGNITIVE VECTOR MODE + HUMAN-LIKE ANSWERING
+    #  COGNITIVE VECTOR MODE + HUMAN-LIKE NLG
     # ============================================================
     def _cognitive_vector_mode(self, llm_package, prompt):
 
-        docs = llm_package.get("documents", [])
-        store = build_vector_store(docs)
+        store = llm_package.get("vector_store")
+
+        if not store or not store.get("docs"):
+            return {"status": "success", "reply": "I couldn't find helpful reference data to answer that."}
 
         matches = search_vector_store(store, prompt, top_k=5)
         matches = [m for m in matches if isinstance(m, str)]
 
         if not matches:
-            return {"status": "success", "reply": f"Sorry, I don't have enough information to answer **{prompt}**."}
+            return {
+                "status": "success",
+                "reply": f"I don't have enough context to fully answer: **{prompt}**"
+            }
 
         persona = llm_package.get("persona", "assistant")
         tone = llm_package.get("tone", "helpful")
 
-        # Human-style answer generation
+        # Human-style NARE-X generation
         final_answer = generate_human_answer(prompt, matches[:3], persona, tone)
 
         return {
             "status": "success",
             "reply": final_answer,
-            "llm_mode": "Human-Like-Answering-v5.0"
+            "llm_mode": "Human-Like-Answering-v5.1"
         }
 
 
     # ============================================================
-    #   EXPLAIN MODE
+    #  EXPLAIN MODE
     # ============================================================
     def explain(self, prompt, df=None):
         if isinstance(df, pd.DataFrame):
@@ -202,15 +217,25 @@ class SifraLLMEngine:
 
 
     # ============================================================
-    #   EXPORT LLM PACKAGE
+    #  EXPORT LLM PACKAGE (for downloading)
     # ============================================================
     def export_llm(self, llm_package):
 
         mem = io.BytesIO()
 
+        safe_pkg = {
+            "llm_id": llm_package.get("llm_id"),
+            "persona": llm_package.get("persona"),
+            "tone": llm_package.get("tone"),
+            "documents": llm_package.get("documents"),
+        }
+
         with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as z:
-            z.writestr("config.json", json.dumps(llm_package, indent=4))
+            z.writestr("llm.json", json.dumps(safe_pkg, indent=4))
 
         mem.seek(0)
         return mem
-    # ============================================================
+
+# ============================================================
+# SEARCH ENGINE HELPERS
+# ============================================================
