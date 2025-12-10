@@ -1,6 +1,6 @@
 # ============================================================
-#  SIFRA AI v10.0 ENTERPRISE (COGNITIVE ENGINE EDITION)
-#  AutoML + LLM + Brain Pipeline + Knowledge + Insights
+#  SIFRA AI v10.1 ENTERPRISE (COGNITIVE + HUMAN LLM EDITION)
+#  AutoML • Cognitive RAG • Human Reply LLM • Brain Pipeline
 # ============================================================
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,8 +21,8 @@ from tasks.dataset_to_knowledge import df_to_sentences
 # ------------------------------------------------------------
 app = FastAPI(
     title="SIFRA AI Backend",
-    version="10.0-Cognitive-Enterprise",
-    description="SIFRA Enterprise Cognitive Engine (AutoML + LLM + Brain)"
+    version="10.1-Human-Cognitive",
+    description="SIFRA Enterprise Cognitive Engine v10.1 (AutoML + LLM + Brain)"
 )
 
 # ------------------------------------------------------------
@@ -37,7 +37,7 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------
-# GLOBAL ENGINES
+# GLOBAL ENGINE OBJECTS
 # ------------------------------------------------------------
 engine = SIFRAUnifiedEngine()
 llm_engine = SifraLLMEngine()
@@ -45,24 +45,28 @@ LLM_CACHE = None
 
 
 # ------------------------------------------------------------
-# NORMALIZE DATASET (robust)
+# NORMALIZE DATASET (Strongest Version)
 # ------------------------------------------------------------
 def normalize_dataset(ds):
     try:
+        # JSON structured dataset
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
             cols = ds["columns"]
             fixed = []
             for row in ds["data"]:
-                if len(row) > len(cols):
-                    row = row[:len(cols)]
-                elif len(row) < len(cols):
+                # trim / pad rows safely
+                if len(row) < len(cols):
                     row = row + [None] * (len(cols) - len(row))
+                elif len(row) > len(cols):
+                    row = row[:len(cols)]
                 fixed.append(row)
             return pd.DataFrame(fixed, columns=cols)
 
+        # CSV string
         if isinstance(ds, str) and "," in ds and "\n" in ds:
             return pd.read_csv(StringIO(ds))
 
+        # List of lists
         if isinstance(ds, list) and len(ds) and isinstance(ds[0], list):
             longest = max(len(r) for r in ds)
             cols = [f"col_{i+1}" for i in range(longest)]
@@ -76,6 +80,7 @@ def normalize_dataset(ds):
             return pd.DataFrame(fixed, columns=cols)
 
         return pd.DataFrame()
+
     except:
         traceback.print_exc()
         return pd.DataFrame()
@@ -86,9 +91,7 @@ def normalize_dataset(ds):
 # ------------------------------------------------------------
 def sanitize(v):
     if isinstance(v, float):
-        if math.isnan(v) or math.isinf(v):
-            return 0
-        return v
+        return 0 if (math.isnan(v) or math.isinf(v)) else v
     if isinstance(v, dict):
         return {k: sanitize(x) for k, x in v.items()}
     if isinstance(v, list):
@@ -97,7 +100,7 @@ def sanitize(v):
 
 
 # ============================================================
-# CREATE MODEL
+# CREATE MODEL (AutoML)
 # ============================================================
 @app.post("/create_model")
 async def create_model(request: Request):
@@ -111,6 +114,7 @@ async def create_model(request: Request):
         automl = engine.run("automl_train", {"dataset": df})
         result = automl.get("result", automl)
 
+        # Decode preprocessor metadata
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
@@ -124,7 +128,6 @@ async def create_model(request: Request):
             except:
                 result["feature_names"] = list(df.columns[:-1])
                 result["feature_count"] = len(result["feature_names"])
-
         else:
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(result["feature_names"])
@@ -141,7 +144,7 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# CREATE LLM
+# CREATE LLM (Synthetic + Human Mode)
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
@@ -157,7 +160,10 @@ async def create_llm(request: Request):
         if isinstance(docs, str):
             docs = [x.strip() for x in docs.split("\n") if x.strip()]
 
-        result = engine.run("create_llm", {"documents": docs, "config": config})
+        result = engine.run("create_llm", {
+            "documents": docs,
+            "config": config
+        })
 
         global LLM_CACHE
         LLM_CACHE = result.get("llm_package")
@@ -170,7 +176,7 @@ async def create_llm(request: Request):
 
 
 # ============================================================
-# LLM INFERENCE
+# LLM INFERENCE (Human LLM + RAG)
 # ============================================================
 @app.post("/llm_inference")
 async def llm_inference(request: Request):
@@ -179,18 +185,18 @@ async def llm_inference(request: Request):
 
         llm_package = body.get("llm_package") or LLM_CACHE
         if not llm_package:
-            raise Exception("LLM package missing")
+            raise Exception("LLM Package missing")
 
         prompt = body.get("prompt") or body.get("query")
         if not prompt:
             raise Exception("Prompt missing")
 
-        raw = engine.run("test_llm", {
+        response = engine.run("test_llm", {
             "llm_package": llm_package,
             "prompt": prompt
         })
 
-        return {"status": "success", "response": raw}
+        return {"status": "success", "response": response}
 
     except Exception as e:
         traceback.print_exc()
@@ -198,23 +204,26 @@ async def llm_inference(request: Request):
 
 
 # ============================================================
-# DATASET → KNOWLEDGE
+# DATASET → KNOWLEDGE SENTENCES
 # ============================================================
 @app.post("/dataset_to_knowledge")
 async def dataset_to_knowledge(request: Request):
     try:
         body = await request.json()
         df = normalize_dataset(body.get("dataset") or body.get("data"))
+
         if df.empty:
             return {"status": "success", "sentences": []}
+
         return {"status": "success", "sentences": df_to_sentences(df)}
+
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, f"/dataset_to_knowledge failed: {str(e)}")
 
 
 # ============================================================
-# BRAIN PIPELINE (FIXED — NO DOUBLE WRAP)
+# BRAIN PIPELINE (Final FE-Compatible Output)
 # ============================================================
 @app.post("/run")
 async def run_brain(request: Request):
@@ -235,18 +244,14 @@ async def run_brain(request: Request):
         }
 
         query = mode_map.get(mode)
-        if query is None:
-            raise Exception(f"Unknown analysis mode '{mode}'")
+        if not query:
+            raise Exception(f"Unknown mode '{mode}'")
 
-        # NEW: engine already returns full FE-compatible object
-        unified = engine.run("brain_pipeline", {"dataset": df, "query": query})
-
-        # unified = {
-        #   "status": "success",
-        #   "response": {summary, visuals, insights, ai_explanation, raw_brain}
-        # }
-
-        return unified   # DO NOT WRAP AGAIN
+        # FULL FE-compatible object returned directly
+        return engine.run("brain_pipeline", {
+            "dataset": df,
+            "query": query
+        })
 
     except Exception as e:
         traceback.print_exc()
@@ -254,7 +259,7 @@ async def run_brain(request: Request):
 
 
 # ============================================================
-# PREDICT
+# PREDICT (AutoML Model Inference)
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
@@ -266,14 +271,13 @@ async def predict(request: Request):
         sample = body.get("sample") or body.get("features")
 
         if not model_hex or not pre_hex:
-            raise Exception("Model or preprocessor missing")
+            raise Exception("Model or Preprocessor missing")
 
         model = pickle.loads(bytes.fromhex(model_hex))
         pre = pickle.loads(bytes.fromhex(pre_hex))
 
-        df = pd.DataFrame([sample])
-
-        X = pre.transform(df)
+        sample_df = pd.DataFrame([sample])
+        X = pre.transform(sample_df)
         pred = model.predict(X).tolist()
 
         return {"status": "success", "prediction": pred}
@@ -288,4 +292,4 @@ async def predict(request: Request):
 # ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "10.0-Cognitive-Enterprise"}
+    return {"status": "ok", "version": "10.1-Human-Cognitive"}

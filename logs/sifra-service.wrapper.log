@@ -131,3 +131,7 @@
 2025-12-10 13:09:38,172 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
 2025-12-10 13:09:38,219 INFO  - Started process 7600
 2025-12-10 13:09:38,233 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender
+2025-12-10 20:26:35,689 DEBUG - Starting WinSW in service mode
+2025-12-10 20:26:35,964 INFO  - Starting C:\Windows\System32\cmd.exe /c D:\sifra-ai-brain\SIFRA_AI_REGEN\run_sifra.bat
+2025-12-10 20:26:36,011 INFO  - Started process 7812
+2025-12-10 20:26:36,027 DEBUG - Forwarding logs of the process System.Diagnostics.Process (cmd) to WinSW.SizeBasedRollingLogAppender

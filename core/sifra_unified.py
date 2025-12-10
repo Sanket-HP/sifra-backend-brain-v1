@@ -1,6 +1,6 @@
 # ============================================================
-#   SIFRA Unified Intelligence Engine v10.0 (FE-Compatible Mode)
-#   NEW FORMAT OUTPUT FOR FRONTEND (SUMMARY + INSIGHTS + VISUALS)
+#   SIFRA Unified Intelligence Engine v10.1 
+#   FE-Compatible + Human LLM Mode + Cognitive RAG Integration
 # ============================================================
 
 import pandas as pd
@@ -21,27 +21,30 @@ class SIFRAUnifiedEngine:
 
     def __init__(self):
         self.debug = True
-        self.log = SifraLogger("SIFRA_UNIFIED_10_FE")
+        self.log = SifraLogger("SIFRA_UNIFIED_FE_v10_1")
 
+        # Core components
         self.core = SifraCore()
         self.modeler = AutoModeler()
         self.visualizer = AutoVisualize()
         self.insighter = AutoInsights()
         self.llm_engine = SifraLLMEngine()
 
-        self.active_df = None
-        self._dbg("Unified Engine Loaded (FE-Compatible Mode)")
+        self.active_df = None  # dataset memory for LLM
+        self.last_llm_package = None
+
+        self._dbg("Unified Engine Loaded (v10.1 FE + Human LLM Mode)")
 
     def _dbg(self, *msg):
         if self.debug:
             print("[DEBUG]", *msg)
 
     # ============================================================
-    # UNIVERSAL DATA LOADER
+    # UNIVERSAL DATA LOADER (robust)
     # ============================================================
     def load_dataset(self, src):
 
-        self._dbg("load_dataset() src type:", type(src))
+        self._dbg("load_dataset() src:", type(src))
 
         try:
             if src is None:
@@ -66,7 +69,7 @@ class SIFRAUnifiedEngine:
                 return pd.read_csv(StringIO(src))
 
         except Exception as e:
-            self._dbg("load_dataset ERROR:", e)
+            self._dbg("Dataset load ERROR:", e)
 
         return pd.DataFrame()
 
@@ -92,14 +95,14 @@ class SIFRAUnifiedEngine:
                     return self._handle_brain(ctx)
 
                 case _:
-                    return {"status": "error", "detail": f"Unknown goal '{goal}'"}
+                    return {"status": "error", "detail": f"Unknown goal {goal}"}
 
         except Exception as e:
             traceback.print_exc()
             return {"status": "error", "detail": str(e)}
 
     # ============================================================
-    # LLM GENERATION
+    # CREATE LLM PACKAGE
     # ============================================================
     def _handle_create_llm(self, ctx):
 
@@ -109,9 +112,11 @@ class SIFRAUnifiedEngine:
 
         df = None
 
+        # Dataset present
         if dataset is not None:
             df = self.load_dataset(dataset)
 
+        # Auto-detect CSV-like docs
         if df is None and isinstance(docs, list) and len(docs) > 3:
             try:
                 if "," in docs[0]:
@@ -122,6 +127,7 @@ class SIFRAUnifiedEngine:
         if df is not None and not df.empty:
             self.active_df = df
 
+        # Convert dataset → sentences if needed
         if not isinstance(docs, list):
             try:
                 df2 = self.load_dataset(docs)
@@ -129,67 +135,80 @@ class SIFRAUnifiedEngine:
             except:
                 docs = []
 
-        return self.llm_engine.create_llm(config, docs, df)
+        result = self.llm_engine.create_llm(config, docs, df)
+        self.last_llm_package = result.get("llm_package")
+
+        return result
 
     # ============================================================
-    # LLM INFERENCE
+    # LLM INFERENCE (Human + RAG)
     # ============================================================
     def _handle_test_llm(self, ctx):
 
-        llm_pkg = ctx.get("llm_package")
-        prompt = ctx.get("prompt", "").lower()
+        llm_pkg = ctx.get("llm_package") or self.last_llm_package
+        prompt = ctx.get("prompt", "").strip()
         df = self.active_df
 
+        # Ensure package exists
+        if not llm_pkg:
+            return {"status": "error", "reply": "LLM not created yet."}
+
+        p = prompt.lower()
+
+        # ---------- DATA QUESTION DETECTION ----------
         DATA_KEYWORDS = [
-            "summarize", "summary", "columns", "insights",
-            "analysis", "stats", "trend", "dataset"
+            "summarize", "summary",
+            "columns", "describe",
+            "insights", "analysis",
+            "stats", "trend", "dataset", "explain data"
         ]
 
-        is_data_question = any(k in prompt for k in DATA_KEYWORDS)
+        is_data_query = any(k in p for k in DATA_KEYWORDS)
 
-        if df is not None and not df.empty and is_data_question:
+        # ---------- DATA-AWARE MODE ----------
+        if df is not None and not df.empty and is_data_query:
             return {
                 "status": "success",
                 "reply": self._data_summary(df)
             }
 
-        if df is not None and not df.empty:
-            return {
-                "status": "success",
-                "reply": self.llm_engine.explain(prompt, df)
-            }
+        # ---------- HUMAN MODE + RAG MODE ----------
+        response = self.llm_engine.inference(llm_pkg, prompt)
 
-        raw = self.llm_engine.inference(llm_pkg, prompt)
-        return raw if isinstance(raw, dict) else {"status": "success", "reply": str(raw)}
+        return {
+            "status": "success",
+            "reply": response.get("reply", ""),
+            "model": response.get("model", "LLM-HUMAN-v10"),
+            "confidence": response.get("confidence", 0.87)
+        }
 
     # ============================================================
-    # BRAIN PIPELINE (FE FORMAT OUTPUT)
+    # BRAIN PIPELINE → FE FORMAT
     # ============================================================
     def _handle_brain(self, ctx):
 
         df = self.load_dataset(ctx.get("dataset"))
         self.active_df = df
 
-        # 1) Raw SIFRA Brain
+        # --- Core analysis ---
         brain = self.core.run("analyze", df)
 
-        # 2) Auto Insights module
+        # --- Auto Insights ---
         insights = self.insighter.run(df)
 
-        # 3) Auto Visualization module
+        # --- Visual Blueprint ---
         visuals = self.visualizer.run(df)
 
-        # 4) Summary for FE
+        # --- FE Summary ---
         summary = (
-            f"SIFRA detected {len(df.columns)} features and {len(df)} rows. "
-            f"Trend score: {brain.get('HDS',{}).get('trend_score',0)}. "
-            f"Key insights generated automatically."
+            f"The dataset contains **{len(df)} rows** and **{len(df.columns)} features**. "
+            f"Trend Score: **{brain.get('HDS',{}).get('trend_score',0)}**. "
+            f"SIFRA generated insights & visualization automatically."
         )
 
-        # 5) AI Explanation from CRE
+        # --- AI Explanation ---
         ai_explain = brain.get("CRE", {}).get("final_decision", "No CRE explanation available.")
 
-        # FE-Compatible Payload
         return {
             "summary": summary,
             "visuals": visuals.get("visual_plan"),
@@ -207,29 +226,32 @@ class SIFRAUnifiedEngine:
         self.active_df = df
 
         meta = self.modeler.run(df)
-        result = meta.get("result", meta)
-
         return {
             "status": "success",
             "mode": "train",
-            "result": result
+            "result": meta.get("result", meta)
         }
 
     # ============================================================
-    # INTERNAL — SUMMARY BUILDER (FIXED)
+    # INTERNAL — IMPROVED DATA SUMMARY (human readable)
     # ============================================================
     def _data_summary(self, df):
 
-        # Convert column names to string to avoid TypeError
         cols = [str(c) for c in df.columns]
 
-        out = []
-        out.append(f"Rows: {df.shape[0]}")
-        out.append(f"Columns: {df.shape[1]}")
+        text = "### 📊 Dataset Summary\n"
+        text += f"- **Rows:** {df.shape[0]}\n"
+        text += f"- **Columns:** {df.shape[1]}\n"
+        text += f"- **Top Columns:** {', '.join(cols[:5])}\n\n"
 
-        # Safe Top Columns
-        top_cols = cols[:5]
-        out.append("Top columns: " + ", ".join(top_cols))
+        # Numeric stats
+        num_cols = df.select_dtypes(include=['int64', 'float64']).columns
+        if len(num_cols):
+            text += "### 📈 Numeric Stats\n"
+            for c in num_cols:
+                s = df[c]
+                text += f"- **{c}** → mean={s.mean():.2f}, min={s.min()}, max={s.max()}\n"
 
-        return "\n".join(out)
-
+        return text
+# ============================================================
+# SEARCH ENGINE HELPERS
