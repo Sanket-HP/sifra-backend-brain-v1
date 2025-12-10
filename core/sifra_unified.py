@@ -179,19 +179,17 @@ class SIFRAUnifiedEngine:
         # 3) Auto Visualization module
         visuals = self.visualizer.run(df)
 
-        # 4) Build Summary
+        # 4) Summary for FE
         summary = (
             f"SIFRA detected {len(df.columns)} features and {len(df)} rows. "
             f"Trend score: {brain.get('HDS',{}).get('trend_score',0)}. "
             f"Key insights generated automatically."
         )
 
-        # 5) Build AI Explanation (CRE)
-        ai_explain = brain.get("CRE", {}).get("final_decision", "No CRE explanation.")
+        # 5) AI Explanation from CRE
+        ai_explain = brain.get("CRE", {}).get("final_decision", "No CRE explanation available.")
 
-        # ======================================================
-        # 💥 FE-COMPATIBLE OUTPUT (FORMAT A)
-        # ======================================================
+        # FE-Compatible Payload
         return {
             "summary": summary,
             "visuals": visuals.get("visual_plan"),
@@ -218,13 +216,20 @@ class SIFRAUnifiedEngine:
         }
 
     # ============================================================
-    # INTERNAL — SUMMARY BUILDER
+    # INTERNAL — SUMMARY BUILDER (FIXED)
     # ============================================================
     def _data_summary(self, df):
+
+        # Convert column names to string to avoid TypeError
+        cols = [str(c) for c in df.columns]
 
         out = []
         out.append(f"Rows: {df.shape[0]}")
         out.append(f"Columns: {df.shape[1]}")
-        out.append("Top columns: " + ", ".join(df.columns[:5]))
+
+        # Safe Top Columns
+        top_cols = cols[:5]
+        out.append("Top columns: " + ", ".join(top_cols))
 
         return "\n".join(out)
+
