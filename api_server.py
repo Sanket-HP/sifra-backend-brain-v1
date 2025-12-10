@@ -59,24 +59,58 @@ def index():
 
 
 # ------------------------------------------------------------
-# NORMALIZE DATASET INPUT
+# 🔥 ROBUST NORMALIZE DATASET (Fixed Misaligned Rows)
 # ------------------------------------------------------------
 def normalize_dataset(ds):
+    """
+    Handles:
+    - CSV string
+    - dict {"columns": [], "data": []}
+    - list of rows
+    - Unequal row lengths (trim/pad)
+    """
 
     try:
+        # Case 1 → dict input
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
-            return pd.DataFrame(ds["data"], columns=ds["columns"])
+            cols = ds["columns"]
+            data = ds["data"]
+            fixed = []
 
-        if isinstance(ds, list) and len(ds) > 0 and isinstance(ds[0], list):
-            cols = [f"col_{i+1}" for i in range(len(ds[0]))]
-            return pd.DataFrame(ds, columns=cols)
+            for row in data:
+                if len(row) > len(cols):
+                    row = row[:len(cols)]
+                elif len(row) < len(cols):
+                    row = row + [None] * (len(cols) - len(row))
+                fixed.append(row)
 
+            return pd.DataFrame(fixed, columns=cols)
+
+        # Case 2 → CSV string
         if isinstance(ds, str) and "," in ds and "\n" in ds:
-            return pd.read_csv(StringIO(ds))
+            df = pd.read_csv(StringIO(ds))
+            return df
+
+        # Case 3 → List of lists
+        if isinstance(ds, list) and len(ds) > 0 and isinstance(ds[0], list):
+            longest = max(len(row) for row in ds)
+            cols = [f"col_{i+1}" for i in range(longest)]
+
+            fixed = []
+            for row in ds:
+                # trim extra values
+                if len(row) > longest:
+                    row = row[:longest]
+                # pad missing values
+                elif len(row) < longest:
+                    row = row + [None] * (longest - len(row))
+                fixed.append(row)
+
+            return pd.DataFrame(fixed, columns=cols)
 
         return pd.DataFrame()
 
-    except:
+    except Exception as e:
         traceback.print_exc()
         return pd.DataFrame()
 
@@ -106,7 +140,7 @@ async def create_model(request: Request):
         body = await request.json()
         df = normalize_dataset(body.get("dataset") or body.get("data"))
 
-        if df.empty:
+        if df.empty or df.shape[1] < 2:
             return {"status": "fail", "detail": "Dataset empty or invalid"}
 
         automl = engine.run("automl_train", {"dataset": df})
@@ -116,12 +150,17 @@ async def create_model(request: Request):
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
-            result["feature_count"] = pre.n_features_in_
-            result["feature_names"] = (
-                list(pre.feature_names_in_)
-                if hasattr(pre, "feature_names_in_")
-                else [f"feature_{i+1}" for i in range(pre.n_features_in_)]
-            )
+
+            try:
+                result["feature_count"] = pre.n_features_in_
+                result["feature_names"] = (
+                    list(pre.feature_names_in_)
+                    if hasattr(pre, "feature_names_in_")
+                    else [f"feature_{i+1}" for i in range(pre.n_features_in_)]
+                )
+            except:
+                result["feature_names"] = list(df.columns[:-1])
+                result["feature_count"] = len(result["feature_names"])
         else:
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(df.columns) - 1
@@ -138,7 +177,7 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# CREATE LLM (Synthetic + Cognitive)
+# CREATE LLM (Synthetic)
 # ============================================================
 @app.post("/create_llm")
 async def create_llm(request: Request):
@@ -171,7 +210,7 @@ async def create_llm(request: Request):
 
 
 # ============================================================
-# LLM INFERENCE (Hybrid Dataset + LLM)
+# LLM INFERENCE
 # ============================================================
 @app.post("/llm_inference")
 async def llm_inference(request: Request):
@@ -222,7 +261,7 @@ async def dataset_to_knowledge(request: Request):
 
 
 # ============================================================
-# ENTERPRISE BRAIN PIPELINE (CRE + DMAO + ALL)
+# ENTERPRISE BRAIN PIPELINE
 # ============================================================
 @app.post("/run")
 async def run_brain(request: Request):
@@ -248,7 +287,6 @@ async def run_brain(request: Request):
         if query is None:
             raise Exception(f"Unknown analysis mode '{mode}'")
 
-        # Call the new cognitive brain pipeline
         response = engine.run("brain_pipeline", {
             "dataset": df,
             "query": query
@@ -262,7 +300,7 @@ async def run_brain(request: Request):
 
 
 # ============================================================
-# PREDICT (AutoML Model)
+# PREDICT (AutoML)
 # ============================================================
 @app.post("/predict")
 async def predict(request: Request):
@@ -307,5 +345,7 @@ async def predict(request: Request):
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "10.0-Cognitive-Enterprise"}
+
 # ============================================================
-#  SIFRA LLM ENGINE v4.5 — COGNITIVE RAG    
+#  END OF FILE
+# ============================================================
