@@ -1,10 +1,11 @@
 # ============================================================
-#  ENGINE ROUTER v4.5 (UPDATED FOR SIFRA AI 4.5)
+#  ENGINE ROUTER v4.6 (UPDATED FOR SIFRA AI + EXCELON)
 #
 #  New Capabilities:
-#    ✔ Smart Goal Classifier 3.0 (matches SifraCore)
+#    ✔ Smart Goal Classifier 3.0
 #    ✔ CRE + DMAO aware routing
-#    ✔ Auto-corrects similar goals (NLP fuzzy matching)
+#    ✔ NLP fuzzy goal correction
+#    ✔ Excelon™ Spreadsheet Engine support
 #    ✔ Multi-agent safe routing
 #    ✔ Unified fallback handler
 # ============================================================
@@ -16,50 +17,67 @@ from core.sifra_core import SifraCore
 class EngineRouter:
     """
     Routes user goals to the SIFRA Core Engine.
-    Now enhanced for CRE + DMAO + ALL.
+    Enhanced with Excelon™ (algorithm-based sheet generation).
     """
 
     VALID_GOALS = {
+        # -------------------------
+        # ANALYTICS
+        # -------------------------
         "analyze": "analytics",
         "analysis": "analytics",
         "auto_analyze": "analytics",
-
-        "predict": "time_series",
-        "prediction": "time_series",
-        "auto_predict": "time_series",
-
-        "forecast": "time_series",
-        "future": "time_series",
-        "auto_forecast": "time_series",
-
-        "anomaly": "anomaly",
-        "anomalies": "anomaly",
-        "auto_anomaly": "anomaly",
-
         "insights": "analytics",
-        "insight": "analytics",
         "auto_insights": "analytics",
-
         "trend": "analytics",
         "pattern": "analytics",
         "statistics": "analytics",
 
-        # Additional intelligent mappings
+        # -------------------------
+        # TIME SERIES
+        # -------------------------
+        "predict": "time_series",
+        "prediction": "time_series",
+        "auto_predict": "time_series",
+        "forecast": "time_series",
+        "future": "time_series",
+        "auto_forecast": "time_series",
+
+        # -------------------------
+        # ANOMALY
+        # -------------------------
+        "anomaly": "anomaly",
+        "anomalies": "anomaly",
+        "auto_anomaly": "anomaly",
+
+        # -------------------------
+        # ML MODELING
+        # -------------------------
         "model": "ml_model",
         "train_model": "ml_model",
         "build_model": "ml_model",
+
+        # -------------------------
+        # EXCELON (NEW)
+        # -------------------------
+        "excelon": "excelon",
+        "sheet": "excelon",
+        "sheets": "excelon",
+        "excel": "excelon",
+        "report": "excelon",
+        "generate_report": "excelon",
     }
 
     def __init__(self):
         self.core = SifraCore()
-        print("[ENGINE ROUTER] SIFRA Router v4.5 Ready.")
+        print("[ENGINE ROUTER] SIFRA Router v4.6 Ready (Excelon enabled).")
 
     # --------------------------------------------------------
-    #  NLP Fuzzy Matching
+    #  NLP FUZZY MATCHING
     # --------------------------------------------------------
     def auto_correct_goal(self, text):
         """
-        Tries to fix unknown user goals (ex: 'anlyze' → 'analyze').
+        Fixes minor typos (ex: 'anlyze' → 'analyze').
         """
         candidates = list(self.VALID_GOALS.keys())
         match = difflib.get_close_matches(text, candidates, n=1, cutoff=0.6)
@@ -68,43 +86,64 @@ class EngineRouter:
     # --------------------------------------------------------
     #  SMART ROUTER
     # --------------------------------------------------------
-    def route(self, goal, dataset):
+    def route(self, goal, dataset, context=None):
         """
-        Routes tasks to SIFRA Core with deep brain support.
+        Routes tasks to SIFRA Core or Excelon.
         """
         print(f"[ROUTER] Received goal: {goal}")
 
         if not goal or not isinstance(goal, str):
             return {
-                "error": "Invalid goal format.",
+                "status": "error",
+                "message": "Invalid goal format.",
                 "goal": str(goal)
             }
 
         clean_goal = goal.lower().strip()
+        context = context or {}
 
-        # 1. DIRECT MATCH
+        # 1️⃣ DIRECT MATCH
         if clean_goal in self.VALID_GOALS:
-            mapped_goal = clean_goal
+            mapped_goal = self.VALID_GOALS[clean_goal]
             print(f"[ROUTER] Direct match → {mapped_goal}")
+
+            # Excelon bypasses SifraCore
+            if mapped_goal == "excelon":
+                from tasks.auto_excelon import run_excelon
+                return run_excelon(
+                    dataset_path=dataset,
+                    context=context
+                )
+
             return self.core.run(mapped_goal, dataset)
 
-        # 2. FUZZY MATCH (auto-correction)
+        # 2️⃣ FUZZY MATCH
         corrected = self.auto_correct_goal(clean_goal)
         if corrected:
+            mapped_goal = self.VALID_GOALS[corrected]
             print(f"[ROUTER] Auto-corrected '{clean_goal}' → '{corrected}'")
-            return self.core.run(corrected, dataset)
 
-        # 3. HIGH-LEVEL CLASSIFIER FALLBACK
-        print("[ROUTER] No match found → using classifier.")
+            if mapped_goal == "excelon":
+                from tasks.auto_excelon import run_excelon
+                return run_excelon(
+                    dataset_path=dataset,
+                    context=context
+                )
+
+            return self.core.run(mapped_goal, dataset)
+
+        # 3️⃣ CLASSIFIER FALLBACK
+        print("[ROUTER] No rule match → using classifier.")
         brain_mode = self.core.classify_goal(clean_goal)
         return self.core.run(brain_mode, dataset)
 
     # --------------------------------------------------------
-    #  SAFE DEFAULT HANDLER
+    #  SAFE FALLBACK
     # --------------------------------------------------------
     def fallback(self, goal):
         return {
-            "error": "Unrecognized task",
-            "suggestion": f"Did you mean: {self.auto_correct_goal(goal)}?",
+            "status": "error",
+            "message": "Unrecognized task",
+            "suggestion": self.auto_correct_goal(goal),
             "goal": goal
         }

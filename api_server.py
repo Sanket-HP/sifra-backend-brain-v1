@@ -1,20 +1,24 @@
 # ============================================================
-#  SIFRA AI v10.1 ENTERPRISE (COGNITIVE + HUMAN LLM EDITION)
-#  AutoML • Cognitive RAG • Human Reply LLM • Brain Pipeline
+#  SIFRA AI v10.3 ENTERPRISE (COGNITIVE + EXCELON EDITION)
+#  AutoML • Cognitive RAG • Human LLM • Excelon™
 # ============================================================
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 import pandas as pd
 import pickle
 import math
 from io import StringIO
-from typing import Any
+from typing import Any, Optional, List
+import os
+
+from pydantic import BaseModel
 
 from core.sifra_unified import SIFRAUnifiedEngine
 from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
+from tasks.auto_excelon import run_excelon
 
 
 # ------------------------------------------------------------
@@ -22,8 +26,8 @@ from tasks.dataset_to_knowledge import df_to_sentences
 # ------------------------------------------------------------
 app = FastAPI(
     title="SIFRA AI Backend",
-    version="10.1-Human-Cognitive",
-    description="SIFRA Enterprise Cognitive Engine v10.1 (AutoML + LLM + Brain)"
+    version="10.3-Enterprise-Excelon",
+    description="SIFRA Enterprise Engine v10.3 (AutoML + LLM + Excelon)"
 )
 
 # ------------------------------------------------------------
@@ -45,6 +49,41 @@ llm_engine = SifraLLMEngine()
 LLM_CACHE = None
 
 
+# ============================================================
+# Pydantic Models (IMPORTANT)
+# ============================================================
+
+class ExcelonRequest(BaseModel):
+    dataset_path: str
+    context: Optional[dict] = {}
+
+
+class ExcelonResponse(BaseModel):
+    status: str
+    engine: str
+    file_name: str
+    file_path: str
+    sheets_created: List[str]
+
+
+class CreateLLMRequest(BaseModel):
+    documents: Optional[Any] = None
+    dataset: Optional[Any] = None
+    data: Optional[Any] = None
+    config: Optional[dict] = {}
+
+
+class LLMInferenceRequest(BaseModel):
+    llm_package: Optional[Any] = None
+    prompt: Optional[str] = None
+    query: Optional[str] = None
+
+
+class CreateModelRequest(BaseModel):
+    dataset: Optional[Any] = None
+    data: Optional[Any] = None
+
+
 # ------------------------------------------------------------
 # NORMALIZE DATASET
 # ------------------------------------------------------------
@@ -54,26 +93,20 @@ def normalize_dataset(ds):
             cols = ds["columns"]
             fixed = []
             for row in ds["data"]:
-                if len(row) < len(cols):
-                    row = row + [None] * (len(cols) - len(row))
-                elif len(row) > len(cols):
-                    row = row[:len(cols)]
-                fixed.append(row)
+                row = row + [None] * (len(cols) - len(row))
+                fixed.append(row[:len(cols)])
             return pd.DataFrame(fixed, columns=cols)
 
         if isinstance(ds, str) and "," in ds and "\n" in ds:
             return pd.read_csv(StringIO(ds))
 
-        if isinstance(ds, list) and len(ds) and isinstance(ds[0], list):
+        if isinstance(ds, list) and ds and isinstance(ds[0], list):
             longest = max(len(r) for r in ds)
             cols = [f"col_{i+1}" for i in range(longest)]
             fixed = []
             for r in ds:
-                if len(r) < longest:
-                    r = r + [None] * (longest - len(r))
-                elif len(r) > longest:
-                    r = r[:longest]
-                fixed.append(r)
+                r = r + [None] * (longest - len(r))
+                fixed.append(r[:longest])
             return pd.DataFrame(fixed, columns=cols)
 
         return pd.DataFrame()
@@ -84,14 +117,11 @@ def normalize_dataset(ds):
 
 
 # ------------------------------------------------------------
-# JSON SAFE SANITIZER (Fixes /create_llm crash)
+# JSON SAFE SANITIZER
 # ------------------------------------------------------------
 def json_safe(obj: Any):
-    """Makes ANY Python object JSON-serializable."""
     try:
-        if obj is None:
-            return None
-        if isinstance(obj, (str, int, float, bool)):
+        if obj is None or isinstance(obj, (str, int, float, bool)):
             return obj
         if isinstance(obj, float):
             return 0 if (math.isnan(obj) or math.isinf(obj)) else obj
@@ -111,13 +141,12 @@ def json_safe(obj: Any):
 
 
 # ============================================================
-# CREATE MODEL
+# CREATE MODEL (AUTOML)
 # ============================================================
 @app.post("/create_model")
-async def create_model(request: Request):
+async def create_model(req: CreateModelRequest):
     try:
-        body = await request.json()
-        df = normalize_dataset(body.get("dataset") or body.get("data"))
+        df = normalize_dataset(req.dataset or req.data)
 
         if df.empty or df.shape[1] < 2:
             return {"status": "fail", "detail": "Dataset invalid"}
@@ -128,17 +157,6 @@ async def create_model(request: Request):
         pre_hex = result.get("preprocessor_hex")
         if pre_hex:
             pre = pickle.loads(bytes.fromhex(pre_hex))
-            try:
-                result["feature_count"] = pre.n_features_in_
-                result["feature_names"] = (
-                    list(pre.feature_names_in_)
-                    if hasattr(pre, "feature_names_in_")
-                    else [f"feature_{i+1}" for i in range(pre.n_features_in_)]
-                )
-            except:
-                result["feature_names"] = list(df.columns[:-1])
-                result["feature_count"] = len(result["feature_names"])
-        else:
             result["feature_names"] = list(df.columns[:-1])
             result["feature_count"] = len(result["feature_names"])
 
@@ -154,17 +172,36 @@ async def create_model(request: Request):
 
 
 # ============================================================
-# CREATE LLM (Human + RAG Mode)
+# EXCELON™ – CREATE EXCEL REPORT (FIXED)
+# ============================================================
+@app.post("/excelon/create", response_model=ExcelonResponse)
+async def create_excelon(req: ExcelonRequest):
+    try:
+        if not os.path.exists(req.dataset_path):
+            raise Exception("Dataset path does not exist")
+
+        result = run_excelon(
+            dataset_path=req.dataset_path,
+            context=req.context
+        )
+
+        return result
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"/excelon/create failed: {str(e)}")
+
+
+# ============================================================
+# CREATE LLM (HUMAN + RAG)
 # ============================================================
 @app.post("/create_llm")
-async def create_llm(request: Request):
+async def create_llm(req: CreateLLMRequest):
     try:
-        body = await request.json()
-        docs = body.get("documents")
-        config = body.get("config", {})
+        docs = req.documents
 
         if docs is None:
-            df = normalize_dataset(body.get("dataset") or body.get("data"))
+            df = normalize_dataset(req.dataset or req.data)
             docs = df_to_sentences(df)
 
         if isinstance(docs, str):
@@ -172,7 +209,7 @@ async def create_llm(request: Request):
 
         result = engine.run("create_llm", {
             "documents": docs,
-            "config": config
+            "config": req.config or {}
         })
 
         global LLM_CACHE
@@ -190,20 +227,16 @@ async def create_llm(request: Request):
 
 
 # ============================================================
-# LLM INFERENCE (Human Conversational AI)
+# LLM INFERENCE
 # ============================================================
 @app.post("/llm_inference")
-async def llm_inference(request: Request):
+async def llm_inference(req: LLMInferenceRequest):
     try:
-        body = await request.json()
+        llm_package = req.llm_package or LLM_CACHE
+        prompt = req.prompt or req.query
 
-        llm_package = body.get("llm_package") or LLM_CACHE
-        if not llm_package:
-            raise Exception("LLM Package missing")
-
-        prompt = body.get("prompt") or body.get("query")
-        if not prompt:
-            raise Exception("Prompt missing")
+        if not llm_package or not prompt:
+            raise Exception("LLM package or prompt missing")
 
         response = engine.run("test_llm", {
             "llm_package": llm_package,
@@ -221,99 +254,8 @@ async def llm_inference(request: Request):
 
 
 # ============================================================
-# DATASET → KNOWLEDGE
-# ============================================================
-@app.post("/dataset_to_knowledge")
-async def dataset_to_knowledge(request: Request):
-    try:
-        body = await request.json()
-        df = normalize_dataset(body.get("dataset") or body.get("data"))
-
-        if df.empty:
-            return {"status": "success", "sentences": []}
-
-        return json_safe({
-            "status": "success",
-            "sentences": df_to_sentences(df)
-        })
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(500, f"/dataset_to_knowledge failed: {str(e)}")
-
-
-# ============================================================
-# BRAIN PIPELINE
-# ============================================================
-@app.post("/run")
-async def run_brain(request: Request):
-    try:
-        body = await request.json()
-        mode = (body.get("mode") or "").lower()
-
-        df = normalize_dataset(body.get("dataset") or body.get("data"))
-        if df.empty:
-            raise Exception("Dataset empty")
-
-        mode_map = {
-            "analyze": "Dataset analysis",
-            "visualize": "Create visualization plan",
-            "forecast": "Forecast future values",
-            "anomaly": "Detect anomalies",
-            "insights": "Extract insights"
-        }
-
-        query = mode_map.get(mode)
-        if not query:
-            raise Exception(f"Unknown mode '{mode}'")
-
-        result = engine.run("brain_pipeline", {
-            "dataset": df,
-            "query": query
-        })
-
-        return json_safe(result)
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(500, f"/run failed: {str(e)}")
-
-
-# ============================================================
-# PREDICT
-# ============================================================
-@app.post("/predict")
-async def predict(request: Request):
-    try:
-        body = await request.json()
-
-        model_hex = body.get("model_hex")
-        pre_hex = body.get("preprocessor_hex")
-        sample = body.get("sample") or body.get("features")
-
-        if not model_hex or not pre_hex:
-            raise Exception("Model or Preprocessor missing")
-
-        model = pickle.loads(bytes.fromhex(model_hex))
-        pre = pickle.loads(bytes.fromhex(pre_hex))
-
-        sample_df = pd.DataFrame([sample])
-        X = pre.transform(sample_df)
-        pred = model.predict(X).tolist()
-
-        return json_safe({
-            "status": "success",
-            "prediction": pred
-        })
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(500, f"/predict failed: {str(e)}")
-
-
-# ============================================================
 # HEALTH
 # ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "10.1-Human-Cognitive"}
+    return {"status": "ok", "version": "10.3-Enterprise-Excelon"}
