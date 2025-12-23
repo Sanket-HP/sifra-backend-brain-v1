@@ -1,9 +1,8 @@
 # ============================================================
 #  SIFRA AI v10.3 ENTERPRISE (COGNITIVE + EXCELON EDITION)
-#  AutoML • Cognitive RAG • Human LLM • Excelon™
 # ============================================================
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import traceback
@@ -23,7 +22,7 @@ from tasks.auto_excelon import run_excelon
 
 
 # ============================================================
-# SINGLETON ENGINE REGISTRY (CRITICAL FIX)
+# SINGLETON ENGINE REGISTRY
 # ============================================================
 
 _ENGINE = None
@@ -46,16 +45,14 @@ def get_llm_engine() -> SifraLLMEngine:
 
 
 # ============================================================
-# FASTAPI LIFESPAN (INIT ONCE)
+# FASTAPI LIFESPAN
 # ============================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ---- startup (runs ONCE per process) ----
     get_engine()
     get_llm_engine()
     yield
-    # ---- shutdown (optional cleanup) ----
 
 
 # ============================================================
@@ -164,8 +161,6 @@ def json_safe(obj: Any):
             return {str(k): json_safe(v) for k, v in obj.items()}
         if isinstance(obj, list):
             return [json_safe(x) for x in obj]
-        if isinstance(obj, tuple):
-            return [json_safe(x) for x in obj]
         if isinstance(obj, pd.DataFrame):
             return obj.to_dict(orient="records")
         if hasattr(obj, "tolist"):
@@ -173,6 +168,45 @@ def json_safe(obj: Any):
         return str(obj)
     except Exception:
         return str(obj)
+
+
+# ============================================================
+# ROOT (OPTIONAL BUT CLEAN)
+# ============================================================
+
+@app.get("/")
+def root():
+    return {
+        "name": "SIFRA AI Backend",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+# ============================================================
+# UNIVERSAL RUN ENDPOINT (🔥 FIXES 404 /run 🔥)
+# ============================================================
+
+@app.post("/run")
+async def run_engine(request: Request):
+    try:
+        payload = await request.json()
+        engine = get_engine()
+
+        result = engine.run(
+            payload.get("goal", "analyze"),
+            payload.get("dataset")
+        )
+
+        return {
+            "status": "success",
+            "result": json_safe(result)
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
 
 
 # ============================================================
@@ -190,12 +224,6 @@ async def create_model(req: CreateModelRequest):
         engine = get_engine()
         automl = engine.run("automl_train", {"dataset": df})
         result = automl.get("result", automl)
-
-        pre_hex = result.get("preprocessor_hex")
-        if pre_hex:
-            pre = pickle.loads(bytes.fromhex(pre_hex))
-            result["feature_names"] = list(df.columns[:-1])
-            result["feature_count"] = len(result["feature_names"])
 
         return json_safe({
             "status": "success",
