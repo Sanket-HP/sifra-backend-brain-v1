@@ -1,5 +1,5 @@
 # ============================================================
-#   SIFRA Unified Intelligence Engine v10.1 
+#   SIFRA Unified Intelligence Engine v10.1
 #   FE-Compatible + Human LLM Mode + Cognitive RAG Integration
 # ============================================================
 
@@ -7,31 +7,41 @@ import pandas as pd
 from io import StringIO
 import traceback
 
-from core.sifra_core import SifraCore
 from utils.logger import SifraLogger
+
+from core.core_registry import get_core
+from core.sifra_llm_engine import SifraLLMEngine
 
 from tasks.auto_modeler import AutoModeler
 from tasks.auto_visualize import AutoVisualize
 from tasks.auto_insights import AutoInsights
-from core.sifra_llm_engine import SifraLLMEngine
 from tasks.dataset_to_knowledge import df_to_sentences
 
 
 class SIFRAUnifiedEngine:
+    """
+    Unified orchestration layer.
+    IMPORTANT:
+    - Does NOT create SifraCore
+    - Always reuses shared core from registry
+    """
 
     def __init__(self):
         self.debug = True
         self.log = SifraLogger("SIFRA_UNIFIED_FE_v10_1")
 
-        # Core components
-        self.core = SifraCore()
+        # 🔐 SINGLE SHARED CORE
+        self.core = get_core()
+
+        # Capability modules (must NOT create core internally)
         self.modeler = AutoModeler()
         self.visualizer = AutoVisualize()
         self.insighter = AutoInsights()
         self.llm_engine = SifraLLMEngine()
 
-        self.active_df = None        # Memory for data-aware LLM
-        self.last_llm_package = None # Persist last created LLM
+        # Memory
+        self.active_df = None
+        self.last_llm_package = None
 
         self._dbg("Unified Engine Loaded (v10.1 FE + Human LLM Mode)")
 
@@ -41,7 +51,7 @@ class SIFRAUnifiedEngine:
             print("[DEBUG]", *msg)
 
     # ============================================================
-    # UNIVERSAL DATA LOADER (Robust for FE)
+    # UNIVERSAL DATA LOADER
     # ============================================================
     def load_dataset(self, src):
 
@@ -107,11 +117,9 @@ class SIFRAUnifiedEngine:
 
         df = None
 
-        # Load dataset if given
         if dataset is not None:
             df = self.load_dataset(dataset)
 
-        # Auto-detect CSV-style document list
         if df is None and isinstance(docs, list) and len(docs) > 3:
             try:
                 if "," in docs[0]:
@@ -119,11 +127,9 @@ class SIFRAUnifiedEngine:
             except:
                 pass
 
-        # Store dataset for LLM memory
         if df is not None and not df.empty:
             self.active_df = df
 
-        # Convert dataset→sentences if needed
         if not isinstance(docs, list):
             try:
                 df2 = self.load_dataset(docs)
@@ -131,14 +137,13 @@ class SIFRAUnifiedEngine:
             except:
                 docs = []
 
-        # Create LLM
         result = self.llm_engine.create_llm(config, docs, df)
         self.last_llm_package = result.get("llm_package")
 
         return result
 
     # ============================================================
-    # LLM INFERENCE (Human-like + RAG + Data-Aware)
+    # LLM INFERENCE
     # ============================================================
     def _handle_test_llm(self, ctx):
 
@@ -151,7 +156,6 @@ class SIFRAUnifiedEngine:
         df = self.active_df
         p = prompt.lower()
 
-        # Detect if the user wants dataset-level reasoning
         DATA_KEYWORDS = [
             "summarize", "summary", "columns", "describe",
             "insights", "analysis", "stats", "trend",
@@ -160,14 +164,12 @@ class SIFRAUnifiedEngine:
 
         is_data_query = any(k in p for k in DATA_KEYWORDS)
 
-        # Data-aware summary mode
         if df is not None and not df.empty and is_data_query:
             return {
                 "status": "success",
                 "reply": self._data_summary(df)
             }
 
-        # Human-like + RAG inference
         result = self.llm_engine.inference(llm_pkg, prompt)
 
         return {
@@ -178,31 +180,27 @@ class SIFRAUnifiedEngine:
         }
 
     # ============================================================
-    # BRAIN PIPELINE (Produces FE-Compatible Structured Output)
+    # BRAIN PIPELINE
     # ============================================================
     def _handle_brain(self, ctx):
 
         df = self.load_dataset(ctx.get("dataset"))
         self.active_df = df
 
-        # Run SIFRA Brain
         brain = self.core.run("analyze", df)
-
-        # Insights
         insights = self.insighter.run(df)
-
-        # Visual Strategy
         visuals = self.visualizer.run(df)
 
-        # Summary text for FE
         summary = (
             f"The dataset contains **{len(df)} rows** and **{len(df.columns)} columns**. "
             f"Trend Score: **{brain.get('HDS', {}).get('trend_score', 0)}**. "
             f"SIFRA automatically generated insights and visualization plans."
         )
 
-        # CRE Explanation
-        ai_explain = brain.get("CRE", {}).get("final_decision", "No CRE explanation available.")
+        ai_explain = brain.get("CRE", {}).get(
+            "final_decision",
+            "No CRE explanation available."
+        )
 
         return {
             "summary": summary,
@@ -241,8 +239,7 @@ class SIFRAUnifiedEngine:
         text += f"- **Columns:** {df.shape[1]}\n"
         text += f"- **Top Columns:** {', '.join(cols[:5])}\n\n"
 
-        # Numeric data overview
-        nums = df.select_dtypes(include=['int64', 'float64']).columns
+        nums = df.select_dtypes(include=["int64", "float64"]).columns
         if len(nums):
             text += "### 📈 Numeric Stats\n"
             for c in nums:
@@ -250,6 +247,7 @@ class SIFRAUnifiedEngine:
                 text += f"- **{c}** → mean={s.mean():.2f}, min={s.min()}, max={s.max()}\n"
 
         return text
+
 
 # ============================================================
 # END OF FILE

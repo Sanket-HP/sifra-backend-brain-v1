@@ -5,6 +5,7 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import traceback
 import pandas as pd
 import pickle
@@ -21,18 +22,57 @@ from tasks.dataset_to_knowledge import df_to_sentences
 from tasks.auto_excelon import run_excelon
 
 
-# ------------------------------------------------------------
+# ============================================================
+# SINGLETON ENGINE REGISTRY (CRITICAL FIX)
+# ============================================================
+
+_ENGINE = None
+_LLM_ENGINE = None
+_LLM_CACHE = None
+
+
+def get_engine() -> SIFRAUnifiedEngine:
+    global _ENGINE
+    if _ENGINE is None:
+        _ENGINE = SIFRAUnifiedEngine()
+    return _ENGINE
+
+
+def get_llm_engine() -> SifraLLMEngine:
+    global _LLM_ENGINE
+    if _LLM_ENGINE is None:
+        _LLM_ENGINE = SifraLLMEngine()
+    return _LLM_ENGINE
+
+
+# ============================================================
+# FASTAPI LIFESPAN (INIT ONCE)
+# ============================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ---- startup (runs ONCE per process) ----
+    get_engine()
+    get_llm_engine()
+    yield
+    # ---- shutdown (optional cleanup) ----
+
+
+# ============================================================
 # FASTAPI INSTANCE
-# ------------------------------------------------------------
+# ============================================================
+
 app = FastAPI(
     title="SIFRA AI Backend",
     version="10.3-Enterprise-Excelon",
-    description="SIFRA Enterprise Engine v10.3 (AutoML + LLM + Excelon)"
+    description="SIFRA Enterprise Engine v10.3 (AutoML + LLM + Excelon)",
+    lifespan=lifespan
 )
 
-# ------------------------------------------------------------
+# ============================================================
 # CORS
-# ------------------------------------------------------------
+# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,16 +81,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------------------------------------------
-# GLOBAL ENGINE OBJECTS
-# ------------------------------------------------------------
-engine = SIFRAUnifiedEngine()
-llm_engine = SifraLLMEngine()
-LLM_CACHE = None
-
 
 # ============================================================
-# Pydantic Models (IMPORTANT)
+# PYDANTIC MODELS
 # ============================================================
 
 class ExcelonRequest(BaseModel):
@@ -84,9 +117,10 @@ class CreateModelRequest(BaseModel):
     data: Optional[Any] = None
 
 
-# ------------------------------------------------------------
-# NORMALIZE DATASET
-# ------------------------------------------------------------
+# ============================================================
+# DATA NORMALIZATION
+# ============================================================
+
 def normalize_dataset(ds):
     try:
         if isinstance(ds, dict) and "columns" in ds and "data" in ds:
@@ -111,14 +145,15 @@ def normalize_dataset(ds):
 
         return pd.DataFrame()
 
-    except:
+    except Exception:
         traceback.print_exc()
         return pd.DataFrame()
 
 
-# ------------------------------------------------------------
-# JSON SAFE SANITIZER
-# ------------------------------------------------------------
+# ============================================================
+# JSON SAFE SERIALIZER
+# ============================================================
+
 def json_safe(obj: Any):
     try:
         if obj is None or isinstance(obj, (str, int, float, bool)):
@@ -136,13 +171,14 @@ def json_safe(obj: Any):
         if hasattr(obj, "tolist"):
             return obj.tolist()
         return str(obj)
-    except:
+    except Exception:
         return str(obj)
 
 
 # ============================================================
 # CREATE MODEL (AUTOML)
 # ============================================================
+
 @app.post("/create_model")
 async def create_model(req: CreateModelRequest):
     try:
@@ -151,6 +187,7 @@ async def create_model(req: CreateModelRequest):
         if df.empty or df.shape[1] < 2:
             return {"status": "fail", "detail": "Dataset invalid"}
 
+        engine = get_engine()
         automl = engine.run("automl_train", {"dataset": df})
         result = automl.get("result", automl)
 
@@ -172,20 +209,19 @@ async def create_model(req: CreateModelRequest):
 
 
 # ============================================================
-# EXCELON™ – CREATE EXCEL REPORT (FIXED)
+# EXCELON™
 # ============================================================
+
 @app.post("/excelon/create", response_model=ExcelonResponse)
 async def create_excelon(req: ExcelonRequest):
     try:
         if not os.path.exists(req.dataset_path):
             raise Exception("Dataset path does not exist")
 
-        result = run_excelon(
+        return run_excelon(
             dataset_path=req.dataset_path,
             context=req.context
         )
-
-        return result
 
     except Exception as e:
         traceback.print_exc()
@@ -193,10 +229,12 @@ async def create_excelon(req: ExcelonRequest):
 
 
 # ============================================================
-# CREATE LLM (HUMAN + RAG)
+# CREATE LLM
 # ============================================================
+
 @app.post("/create_llm")
 async def create_llm(req: CreateLLMRequest):
+    global _LLM_CACHE
     try:
         docs = req.documents
 
@@ -207,13 +245,13 @@ async def create_llm(req: CreateLLMRequest):
         if isinstance(docs, str):
             docs = [x.strip() for x in docs.split("\n") if x.strip()]
 
+        engine = get_engine()
         result = engine.run("create_llm", {
             "documents": docs,
             "config": req.config or {}
         })
 
-        global LLM_CACHE
-        LLM_CACHE = result.get("llm_package")
+        _LLM_CACHE = result.get("llm_package")
 
         return json_safe({
             "status": "success",
@@ -229,15 +267,17 @@ async def create_llm(req: CreateLLMRequest):
 # ============================================================
 # LLM INFERENCE
 # ============================================================
+
 @app.post("/llm_inference")
 async def llm_inference(req: LLMInferenceRequest):
     try:
-        llm_package = req.llm_package or LLM_CACHE
+        llm_package = req.llm_package or _LLM_CACHE
         prompt = req.prompt or req.query
 
         if not llm_package or not prompt:
             raise Exception("LLM package or prompt missing")
 
+        engine = get_engine()
         response = engine.run("test_llm", {
             "llm_package": llm_package,
             "prompt": prompt
@@ -256,6 +296,7 @@ async def llm_inference(req: LLMInferenceRequest):
 # ============================================================
 # HEALTH
 # ============================================================
+
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "10.3-Enterprise-Excelon"}
